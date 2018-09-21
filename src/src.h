@@ -20,4 +20,5 @@ const src_t *src_get(src_ctx_t *ctx);
 
 extern const src_t *src_file;
 extern const src_t *src_curl;
+extern const src_t *src_alsa;
 #endif

@@ -1,7 +1,6 @@
 #ifndef __PLAYER_H__
 #define __PLAYER_H__
 
-extern const char const *mime_mp3;
 extern const char const *mime_octetstream;
 
 typedef enum

@@ -45,9 +45,10 @@ typedef enum
 	PCM_24bits_LE_stereo,
 	PCM_32bits_LE_stereo,
 	PCM_32bits_BE_stereo,
+	MPEG2_3_MP3,
+	FLAC,
 	MPEG2_1,
 	MPEG2_2,
-	MPEG2_3_MP3,
 	DVB_frame,
 } jitter_format_t;
 

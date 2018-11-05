@@ -39,6 +39,14 @@ struct filter_ctx_s
 #define FILTER_CTX
 #include "filter.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
 filter_ctx_t *filter_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -53,30 +61,46 @@ void filter_destroy(filter_ctx_t *ctx)
 	free(ctx);
 }
 
-static int sampled(filter_ctx_t *ctx, unsigned char *in, int inlength, unsigned char *out, int outlength)
+static int sampled(filter_ctx_t *ctx, signed int sample, int bitspersample, unsigned char *out)
 {
-	int length = ctx->samplesize;
-	if (length <= inlength)
+	int i = 3;
+	for (i = 0; i < ctx->samplesize; i++)
 	{
-		in += (inlength - length);
+		int shift = ((ctx->samplesize - i - 1) * 8);
+		//int shift = (i * 8);
+		//dbg("shift %d %d", i, shift);
+		if (shift < 0)
+			break;
+		*(out + i) = (sample >> (bitspersample - shift ) ) & 0x00FF;
 	}
-	memcpy(out, in, length);
-	return length;
+	return i;
 }
 
 static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
+	int i;
+	int j;
 	int bufferlen = 0;
-	while (audio->nsamples && bufferlen < size)
+
+	for (i = 0; i < audio->nsamples; i++)
 	{
-		int i;
-		for (i = 0; i < audio->nchannels && i < ctx->nchannels; i++)
+		signed int sample = audio->samples[0][i];
+		for (j = 0; j < ctx->nchannels; j++)
 		{
-			bufferlen += sampled(ctx, (unsigned char *)audio->samples[i]++, sizeof(*audio->samples[i]),
-					buffer + bufferlen, size - bufferlen);
+			if (j < audio->nchannels)
+				sample = audio->samples[(j % audio->nchannels)][i];
+			bufferlen += sampled(ctx, sample, audio->bitspersample,
+						buffer + bufferlen);
+			if (bufferlen >= size)
+				goto filter_exit;
 		}
-		audio->nsamples--;
+		if (bufferlen >= size)
+			goto filter_exit;
 	}
+filter_exit:
+	audio->nsamples -= i;
+	for (j = 0; j < audio->nchannels; j++)
+		audio->samples[j] += i;
 	return bufferlen;
 }
 

@@ -203,6 +203,11 @@ int main(int argc, char **argv)
 		nbcmds++;
 	}
 #endif
+#ifdef CMDINPUT
+	cmds[nbcmds].ops = cmds_input;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, CMDINPUT_PATH);
+	nbcmds++;
+#endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);

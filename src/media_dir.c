@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <fcntl.h>
 
 #include <pthread.h>
 
@@ -45,6 +46,7 @@
 
 #include "player.h"
 #include "media.h"
+#include "decoder.h"
 
 #define N_(string) string
 
@@ -55,6 +57,7 @@ struct media_ctx_s
 {
 	const char *url;
 	int mediaid;
+	int firstmediaid;
 	int count;
 	unsigned int options;
 	int inotifyfd;
@@ -102,15 +105,20 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
+static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
 
 static const char *utils_getmime(const char *path)
 {
-	char *ext = strrchr(path, '.');
-	if (ext && !strcmp(ext, ".mp3"))
-		return mime_mp3;
-	dbg("Unknonw mime for %s", path);
-	return NULL;
+#ifdef DECODER_MAD
+	if (!decoder_mad->check(path))
+		return decoder_mad->mime;
+#endif
+#ifdef DECODER_FLAC
+	if (!decoder_flac->check(path))
+		return decoder_flac->mime;
+#endif
+	return mime_octetstream;
 }
 
 static char *utils_getpath(const char *url)
@@ -197,6 +205,24 @@ static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
 	return ret;
 }
 
+static media_dirlist_t *_free_medialist(media_dirlist_t *it, int one)
+{
+	while (it != NULL)
+	{
+		if (it->path)
+			free(it->path);
+		it->path == NULL;
+		if (it->items)
+			free(it->items);
+		media_dirlist_t *prev = it->prev;
+		free(it);
+		it = prev;
+		if (one)
+			break;
+	}
+	return it;
+}
+
 static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
 {
 	int ret = 1;
@@ -235,8 +261,9 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 		sprintf(it->path,"/%s", path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
+		
 	}
-	while (it->nitems > 0 && it->index != it->nitems)
+	while (it->nitems > 0 && it->index < it->nitems)
 	{
 		if (it->items[it->index]->d_name[0] == '.')
 		{
@@ -260,17 +287,14 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					if (new->nitems > 0)
 					{
 						new->prev = it;
+						new->mediaid = *pmediaid;
 						ret = _find(ctx, &new, pmediaid, cb, arg);
 						if (ret == 0)
 							it = new;
 					}
 					else
 					{
-						if (new->path)
-							free(new->path);
-						if (new->items)
-							free(new->items);
-						free(new);
+						_free_medialist(new, 1);
 					}
 				}
 			}
@@ -282,7 +306,8 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 				{
 					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
-					if (mime != NULL)
+					ret = -1;
+					if (mime != mime_octetstream)
 						ret = cb(arg, ctx, *pmediaid, path, mime);
 					free(path);
 					if (ret > 0)
@@ -301,13 +326,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 	}
 	if (it->index == it->nitems)
 	{
-		if (it->path)
-			free(it->path);
-		it->path == NULL;
-		free(it->items);
-		media_dirlist_t *prev = it->prev;
-		free(it);
-		it = prev;
+		it = _free_medialist(it, 1);
 	}
 	if (*pmediaid > ctx->count)
 		ctx->count = *pmediaid;
@@ -336,7 +355,6 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 {
-	
 	int ret;
 	int mediaid = 0;
 	media_dirlist_t *dir = NULL;
@@ -383,26 +401,45 @@ static int media_next(media_ctx_t *ctx)
 	_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
 
 	ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+	if ((ctx->firstmediaid - 1) == ctx->mediaid)
+	{
+		if (!(ctx->options & OPTION_LOOP))
+		{
+			ctx->mediaid = -1;
+			if (ctx->current)
+			{
+				ctx->current = _free_medialist(ctx->current, 0);
+			}
+			ctx->current = NULL;
+		}
+		else
+		{
+			ctx->current = media_random(ctx, ctx->options | OPTION_RANDOM);
+		}
+	}
 	if (ret != 0)
 	{
-		ctx->count = ctx->mediaid;
+		if (ctx->count < ctx->mediaid)
+			ctx->count = ctx->mediaid;
 		ctx->mediaid = -1;
-		if (ctx->count > 0 && ctx->options & OPTION_LOOP)
+		if (ctx->current)
+		{
+			ctx->current = _free_medialist(ctx->current, 0);
+		}
+		ctx->current = NULL;
+		if (ctx->count > 0 &&
+			(	(ctx->firstmediaid != ctx->mediaid) ||
+				(ctx->options & OPTION_LOOP)))
+		{
 			media_next(ctx);
+		}
 	}
 	return ctx->mediaid;
 }
 
 static int media_end(media_ctx_t *ctx)
 {
-	media_dirlist_t *it = ctx->current;
-	while (it != NULL)
-	{
-		ctx->current = it->prev;
-		free(it);
-		it = ctx->current;
-	}
-	ctx->current = NULL;
+	ctx->current = _free_medialist(ctx->current, 0);
 	ctx->mediaid = -1;
 	return 0;
 }
@@ -418,8 +455,9 @@ static void media_loop(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_LOOP;
 }
 
-static void media_random(media_ctx_t *ctx, int enable)
+static media_dirlist_t *media_random(media_ctx_t *ctx, int enable)
 {
+	media_dirlist_t *dir = NULL;
 	if (enable)
 	{
 		ctx->options |= OPTION_RANDOM;
@@ -427,19 +465,24 @@ static void media_random(media_ctx_t *ctx, int enable)
 		{
 			int ret;
 			if (ctx->count > 0)
-				ctx->mediaid = (random() % ctx->count);
-			_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-			ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+				ctx->firstmediaid = (random() % (ctx->count - 1));
+			_find_mediaid_t data = {ctx->firstmediaid, NULL, NULL};
+			ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
 			if (ret != 0)
 			{
-				ctx->count = ctx->mediaid;
+				ctx->count = ctx->firstmediaid;
 				if (ctx->count > 0)
-					ctx->mediaid = (random() % ctx->count);
+					ctx->firstmediaid = (random() % (ctx->count - 1));
+				data.id = ctx->firstmediaid;
+				ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
 			}
+			dir->index--;
+			ctx->mediaid = ctx->firstmediaid - 1;
 		}
 	}
 	else
 		ctx->options &= ~OPTION_RANDOM;
+	return dir;
 }
 
 static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
@@ -473,7 +516,7 @@ static void *_check_dir(void *arg)
 
 		if (length < 0)
 		{
-			perror("read");
+			err("read");
 		}
 
 		while (i < length)
@@ -500,7 +543,7 @@ static void *_check_dir(void *arg)
 #if 0
 				else if (event->mask & IN_MODIFY)
 				{
-					printf("The file %s was modified.\n", event->name);
+					dbg("The file %s was modified.", event->name);
 				}
 #endif
 			}
@@ -519,6 +562,7 @@ static media_ctx_t *media_init(const char *url)
 		ctx->mediaid = 0;
 		ctx->url = url;
 		ctx->mediaid = -1;
+		ctx->firstmediaid = -1;
 		ctx->count = MINCOUNT;
 		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
@@ -530,7 +574,19 @@ static media_ctx_t *media_init(const char *url)
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
-	srandom(time(NULL));
+	unsigned int seed;
+	if (!access(RANDOM_DEVICE, R_OK))
+	{
+		int fd = open(RANDOM_DEVICE, O_RDONLY);
+		pthread_yield();
+		read(fd, &seed, sizeof(seed));
+		close(fd);
+	}
+	else
+	{
+		seed = time(NULL);
+	}
+	srandom(seed);
 	return ctx;
 }
 

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_mad.c
+ * decoder_opus.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -32,10 +32,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include <mad.h>
-#ifdef USE_ID3TAG
-#include <id3tag.h>
-#endif
+#include <FLAC/stream_decoder.h>
 
 #include "player.h"
 #include "filter.h"
@@ -44,8 +41,9 @@ typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
 	const decoder_t *ops;
-	struct mad_decoder decoder;
+	FLAC__StreamDecoder *decoder;
 	int nchannels;
+	int samplerate;
 	pthread_t thread;
 	jitter_t *in;
 	unsigned char *inbuffer;
@@ -57,6 +55,7 @@ struct decoder_ctx_s
 #define DECODER_CTX
 #include "decoder.h"
 #include "jitter.h"
+#include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -68,97 +67,86 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
-//#define JITTER_init jitter_scattergather_init
-//#define JITTER_destroy jitter_scattergather_destroy
-#define JITTER_init jitter_ringbuffer_init
-#define JITTER_destroy jitter_ringbuffer_destroy
-static
-signed int scale_16bits(mad_fixed_t sample)
+#define BUFFERSIZE 1500
+
+#define NBUFFER 3
+
+static const char *jitter_name = "flac decoder";
+static decoder_ctx_t *decoder_init(player_ctx_t *player)
 {
-	/* round */
-	sample += (1L << (MAD_F_FRACBITS - 16));
+	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = decoder_flac;
+	ctx->nchannels = 2;
+	ctx->samplerate = DEFAULT_SAMPLERATE;
 
-	/* clip */
-	if (sample >= MAD_F_ONE)
-		sample = MAD_F_ONE - 1;
-	else if (sample < -MAD_F_ONE)
-		sample = -MAD_F_ONE;
+	ctx->decoder = FLAC__stream_decoder_new();
+	if (ctx->decoder == NULL)
+		err("flac decoder: open error");
 
-	/* quantize */
-	return sample >> (MAD_F_FRACBITS + 1 - 16);
+	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+	ctx->in = jitter;
+	jitter->format = FLAC;
+
+	return ctx;
 }
 
-static
-signed int scale_24bits(mad_fixed_t sample)
+static jitter_t *decoder_jitter(decoder_ctx_t *decoder)
 {
-	/* round */
-	sample += (1L << (MAD_F_FRACBITS - 24));
-
-	/* clip */
-	if (sample >= MAD_F_ONE)
-		sample = MAD_F_ONE - 1;
-	else if (sample < -MAD_F_ONE)
-		sample = -MAD_F_ONE;
-
-	/* quantize */
-	return sample >> (MAD_F_FRACBITS + 1 - 24);
+	return decoder->in;
 }
 
-static
-enum mad_flow input(void *data,
-		    struct mad_stream *stream)
+static FLAC__StreamDecoderReadStatus
+input(const FLAC__StreamDecoder *decoder, 
+			FLAC__byte buffer[], size_t *bytes,
+			void *data)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	size_t len = ctx->in->ctx->size;
 
-	if (stream->next_frame)
-		len = stream->next_frame - ctx->inbuffer;
-	ctx->in->ops->pop(ctx->in->ctx, len);
-
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
-
-	len = ctx->in->ops->length(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)
 	{
-		return MAD_FLOW_STOP;
+		*bytes = 0;
+		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
-	//input is called for each frame when there is
-	// not enought data to decode the "next frame"
-	if (stream->next_frame)
-		stream->next_frame = ctx->inbuffer;
+	len = ctx->in->ops->length(ctx->in->ctx);
+	if (len > *bytes)
+		len = *bytes;
+	else
+		*bytes = len;
+	memcpy(buffer, ctx->inbuffer, len);
+	ctx->in->ops->pop(ctx->in->ctx, len);
 
-	mad_stream_buffer(stream, ctx->inbuffer, len);
-
-	return MAD_FLOW_CONTINUE;
+	return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
 }
 
-static
-enum mad_flow output(void *data,
-		     struct mad_header const *header,
-		     struct mad_pcm *pcm)
+static FLAC__StreamDecoderWriteStatus
+output(const FLAC__StreamDecoder *decoder,
+	const FLAC__Frame *frame, const FLAC__int32 * const buffer[],
+	void *data)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
 	/* pcm->samplerate contains the sampling frequency */
 
-	audio.samplerate = pcm->samplerate;
+	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
 	if (ctx->out->ctx->frequence == 0)
 	{
-		decoder_dbg("decoder change samplerate to %u", pcm->samplerate);
-		ctx->out->ctx->frequence = pcm->samplerate;
+		decoder_dbg("decoder change samplerate to %u", audio.samplerate);
+		ctx->out->ctx->frequence = audio.samplerate;
 	}
-	else if (ctx->out->ctx->frequence != pcm->samplerate)
+	else if (ctx->out->ctx->frequence != audio.samplerate)
 	{
 		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
 	}
 
-	audio.nchannels = pcm->channels;
-	audio.nsamples = pcm->length;
-	audio.bitspersample = 24;
+	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
+	audio.nsamples = frame->header.blocksize;
+	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
-		audio.samples[i] = pcm->samples[i];
+		audio.samples[i] = (signed int *)buffer[i];
 	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
 	unsigned int nsamples;
@@ -172,10 +160,11 @@ enum mad_flow output(void *data,
 			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 		}
 
-		ctx->outbufferlen +=
+		int len =
 			ctx->filter.ops->run(ctx->filter.ctx, &audio,
 				ctx->outbuffer + ctx->outbufferlen,
 				ctx->out->ctx->size - ctx->outbufferlen);
+		ctx->outbufferlen += len;
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
@@ -213,90 +202,39 @@ enum mad_flow output(void *data,
 		}
 	}
 #endif
-
-	return MAD_FLOW_CONTINUE;
+	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
-static
-enum mad_flow error(void *data,
-		    struct mad_stream *stream,
-		    struct mad_frame *frame)
+static void
+metadata(const FLAC__StreamDecoder *decoder,
+	const FLAC__StreamMetadata *metadata,
+	void *client_data)
 {
-	if (MAD_RECOVERABLE(stream->error))
-	{
-#ifdef USE_ID3TAG
-		if (stream->error == MAD_ERROR_LOSTSYNC)
-		{
-			signed long tagsize;
-			tagsize = id3_tag_query(stream->this_frame,
-					stream->bufend - stream->this_frame);
-			if (tagsize > 0)
-			{
-#ifdef PROCESS_ID3
-				struct id3_tag *tag;
-
-				tag = get_id3(stream, tagsize, decoder);
-				if (tag) {
-					//process_id3(tag, player);
-					id3_tag_delete(tag);
-				}
-#else
-				mad_stream_skip(stream, tagsize);
-#endif
-			}
-		}
-		else
-#endif
-			dbg("decoding error 0x%04x (%s) at byte offset %p",
-				stream->error, mad_stream_errorstr(stream),
-				stream->this_frame );
-		return MAD_FLOW_CONTINUE;
-	}
-	else
-	{
-		err("decoding error 0x%04x (%s) at byte offset %p",
-			stream->error, mad_stream_errorstr(stream),
-			stream->this_frame );
-		return MAD_FLOW_BREAK;
-	}
 }
 
-#define LATENCE 200 /*ms*/
-#define BUFFERSIZE (40*LATENCE)
-//#define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
+static void
+error(const FLAC__StreamDecoder *decoder,
+	FLAC__StreamDecoderErrorStatus status,
+	void *data)
 
-#define NBUFFER 3
-
-static const char *jitter_name = "mad decoder";
-static decoder_ctx_t *mad_init(player_ctx_t *player)
 {
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_mad;
-	ctx->nchannels = 2;
-
-	mad_decoder_init(&ctx->decoder, ctx,
-			input, 0 /* header */, 0 /* filter */, output,
-			error, 0 /* message */);
-
-	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
-	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-	ctx->in = jitter;
-	jitter->format = MPEG2_3_MP3;
-
-	return ctx;
 }
 
-static jitter_t *mad_jitter(decoder_ctx_t *decoder)
-{
-	return decoder->in;
-}
-
-static void *mad_thread(void *arg)
+static void *decoder_thread(void *arg)
 {
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
-	/* start decoding */
-	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+	result = FLAC__stream_decoder_init_stream(ctx->decoder,
+		input,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		output,
+		metadata,
+		error,
+		ctx);
+	result = FLAC__stream_decoder_process_until_end_of_stream(ctx->decoder);
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer
@@ -305,11 +243,20 @@ static void *mad_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
+	ctx->out->ops->flush(ctx->out->ctx);
 
 	return (void *)result;
 }
 
-static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
+static int decoder_check(char *path)
+{
+	char *ext = strrchr(path, '.');
+	if (ext)
+		return strcmp(ext, ".flac");
+	return -1;
+}
+
+static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	int samplesize = 4;
 	int nchannels = 2;
@@ -341,41 +288,34 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->filter.ops = filter_pcm;
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
 #endif
-	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
+	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return 0;
 }
 
-static int decoder_check(char *path)
-{
-	char *ext = strrchr(path, '.');
-	if (ext)
-		return strcmp(ext, ".mp3");
-	return -1;
-}
-
-static void mad_destroy(decoder_ctx_t *ctx)
+static void decoder_destroy(decoder_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
 	/* release the decoder */
-	mad_decoder_finish(&ctx->decoder);
+	FLAC__stream_decoder_delete(ctx->decoder);
 #ifdef FILTER
 	ctx->filter.ops->destroy(ctx->filter.ctx);
 #endif
-	JITTER_destroy(ctx->in);
+	jitter_ringbuffer_destroy(ctx->in);
 	free(ctx);
 }
 
-const decoder_t *decoder_mad = &(decoder_t)
+const decoder_t *decoder_flac = &(decoder_t)
 {
 	.check = decoder_check,
-	.init = mad_init,
-	.jitter = mad_jitter,
-	.run = mad_run,
-	.destroy = mad_destroy,
-	.mime = "audio/mp3",
+	.init = decoder_init,
+	.jitter = decoder_jitter,
+	.run = decoder_run,
+	.destroy = decoder_destroy,
+	.mime = "audio/flac",
 };
 
-#ifndef DECODER_MAD
+#ifndef DECODER_GET
+#define DECODER_GET
 const decoder_t *decoder_get(decoder_ctx_t *ctx)
 {
 	return ctx->ops;

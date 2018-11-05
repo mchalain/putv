@@ -33,6 +33,7 @@
 
 #include "player.h"
 #include "media.h"
+#include "decoder.h"
 
 struct media_ctx_s
 {
@@ -62,9 +63,14 @@ static int media_end(media_ctx_t *ctx);
 
 static const char *utils_getmime(const char *path)
 {
-	char *ext = strrchr(path, '.');
-	if (!strcmp(ext, ".mp3"))
-		return mime_mp3;
+#ifdef DECODER_MAD
+	if (!decoder_mad->check(path))
+		return decoder_mad->mime;
+#endif
+#ifdef DECODER_FLAC
+	if (!decoder_flac->check(path))
+		return decoder_flac->mime;
+#endif
 	return mime_octetstream;
 }
 

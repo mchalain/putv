@@ -1,6 +1,8 @@
 #ifndef __MEDIA_H__
 #define __MEDIA_H__
 
+#define RANDOM_DEVICE "/dev/hwrng"
+
 typedef struct media_ctx_s media_ctx_t;
 
 typedef int (*media_parse_t)(void *arg, const char *url, const char *info, const char *mime);

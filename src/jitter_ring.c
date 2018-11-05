@@ -89,7 +89,7 @@ jitter_t *jitter_ringbuffer_init(const char *name, unsigned int count, size_t si
 	private->bufferend = private->buffer + (count * size);
 	if (private->buffer == NULL)
 	{
-		err("jitter %s not enought memory %u", name, count * size);
+		err("jitter %s not enought memory %lu", name, count * size);
 		free(private);
 		free(ctx);
 		return NULL;
@@ -103,7 +103,7 @@ jitter_t *jitter_ringbuffer_init(const char *name, unsigned int count, size_t si
 	jitter_t *jitter = calloc(1, sizeof(*jitter));
 	jitter->ctx = ctx;
 	jitter->ops = jitter_ringbuffer;
-	dbg("jitter %s create ring buffer %d (%p - %p)", name, count * size, private->bufferstart, private->bufferend);
+	dbg("jitter %s create ring buffer %ld (%p - %p)", name, count * size, private->bufferstart, private->bufferend);
 	return jitter;
 }
 
@@ -240,7 +240,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 			return NULL;
 		if (private->state == JITTER_FILLING)
 		{
-			dbg("jitter %s not enought data %s/%d", jitter->name, private->level, jitter->size);
+			dbg("jitter %s not enought data (%d/%ld)", jitter->name, private->level, jitter->size);
 			return NULL;
 		}
 	}
@@ -262,7 +262,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 
 	while (private->state == JITTER_FILLING && private->in != NULL)
 	{
-		dbg("jitter %s peer block on %p (%d/%d)", jitter->name, private->out, private->level, jitter->size);
+		dbg("jitter %s peer block on %p (%d/%ld)", jitter->name, private->out, private->level, jitter->size);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 

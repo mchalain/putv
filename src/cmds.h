@@ -21,4 +21,5 @@ struct cmds_s
 
 extern cmds_ops_t *cmds_line;
 extern cmds_ops_t *cmds_json;
+extern cmds_ops_t *cmds_input;
 #endif

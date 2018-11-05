@@ -71,6 +71,11 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static int decoder_check(char *path)
+{
+	return 0;
+}
+
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
 	free(ctx);
@@ -78,10 +83,12 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 
 const decoder_t *decoder_passthrough = &(decoder_t)
 {
+	.check = decoder_check,
 	.init = decoder_init,
 	.jitter = decoder_jitter,
 	.run = decoder_run,
 	.destroy = decoder_destroy,
+	.mime = "octet/stream",
 };
 
 #ifndef DECODER_GET

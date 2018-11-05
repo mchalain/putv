@@ -41,12 +41,23 @@ struct heartbeat_ctx_s
 #define HEARTBEAT_CTX
 #include "heartbeat.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
 heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
 	ctx->samplesize = samplesize;
 	ctx->nchannels = nchannels;
+	clockid_t clockid = CLOCK_REALTIME;
+	clock_gettime(clockid, &ctx->clock);
+
 	return ctx;
 }
 
@@ -59,18 +70,33 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
 	heartbeat_samples_t *beat = (heartbeat_samples_t *)arg;
 	clockid_t clockid = CLOCK_REALTIME;
-	struct timespec clock = {0, 0};
-	memcpy(&clock, &ctx->clock, sizeof(clock));
 	unsigned long msec = beat->nsamples * 1000 / ctx->samplerate;
-	clock.tv_nsec += (msec % 1000) * 1000000;
-	clock.tv_sec += msec / 1000;
+	ctx->clock.tv_nsec += (msec % 1000) * 1000000;
+	ctx->clock.tv_sec += msec / 1000;
+	if (ctx->clock.tv_nsec > 1000000000)
+	{
+		ctx->clock.tv_nsec -= 1000000000;
+		ctx->clock.tv_sec += 1;
+	}
 	struct timespec now = {0, 0};
 	clock_gettime(clockid, &now);
-	if (now.tv_sec > clock.tv_sec ||
-		(now.tv_sec == clock.tv_sec && now.tv_nsec > clock.tv_nsec))
+	if (now.tv_sec > ctx->clock.tv_sec ||
+		(now.tv_sec == ctx->clock.tv_sec && now.tv_nsec > ctx->clock.tv_nsec))
+	{
+		now.tv_sec -= ctx->clock.tv_sec;
+		now.tv_nsec -= ctx->clock.tv_nsec;
+		if (now.tv_nsec < 0)
+		{
+			now.tv_nsec += 1000000000;
+			now.tv_sec -= 1;
+		}
+		if (now.tv_nsec > 10000000)
+			dbg("heartbeat to late %u.%u", now.tv_sec, now.tv_nsec);
+		//clock_gettime(clockid, &ctx->clock);
 		return -1;
+	}
 	int flags = TIMER_ABSTIME;
-	clock_nanosleep(clockid, flags, &clock, NULL);
+	clock_nanosleep(clockid, flags, &ctx->clock, NULL);
 	clock_gettime(clockid, &ctx->clock);
 	beat->nsamples = 0;
 

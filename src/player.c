@@ -82,7 +82,6 @@ struct player_ctx_s
 	pthread_mutex_t mutex;
 };
 
-const char const *mime_mp3 = "audio/mp3";
 const char const *mime_octetstream = "octet/stream";
 
 player_ctx_t *player_init(media_t *media)
@@ -190,8 +189,12 @@ static int _player_play(void* arg, const char *url, const char *info, const char
 	dec = calloc(1, sizeof(*dec));
 	dec->src = SRC;
 #ifdef DECODER_MAD
-	if (mime && !strcmp(mime, mime_mp3))
+	if (mime && !strcmp(mime, decoder_mad->mime))
 		dec->decoder = decoder_mad;
+#endif
+#ifdef DECODER_FLAC
+	if (mime && !strcmp(mime, decoder_flac->mime))
+		dec->decoder = decoder_flac;
 #endif
 	if (dec->decoder == NULL)
 		dec->decoder = DECODER;

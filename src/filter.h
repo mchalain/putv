@@ -6,6 +6,7 @@ typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
 	signed int *samples[MAXCHANNELS];
+	int bitspersample;
 	int nsamples;
 	int nchannels;
 	int samplerate;

@@ -45,6 +45,7 @@ struct sink_ctx_s
 	pthread_t thread;
 	jitter_t *in;
 	state_t state;
+	jitter_format_t format;
 	unsigned int samplerate;
 	int samplesize;
 	int nchannels;
@@ -77,7 +78,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 			ctx->nchannels = 2;
 		break;
 		case PCM_24bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
+			pcm_format = SND_PCM_FORMAT_S24_3LE;
 			ctx->samplesize = 3;
 			ctx->nchannels = 2;
 		break;
@@ -119,9 +120,19 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
 	if (ret < 0)
 	{
-		err("sink: format");
-		goto error;
+		pcm_format = SND_PCM_FORMAT_S24_LE;
+		ctx->samplesize = 4;
+		ctx->nchannels = 2;
+		format = PCM_32bits_LE_stereo;
+		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
+		if (ret < 0)
+		{
+			err("sink: format");
+			goto error;
+		}
+		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
+	ctx->format = format;
 	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, &rate, NULL);
 	if (ret < 0)
 	{
@@ -202,7 +213,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = 2;
-	jitter->format = format;
+	jitter->format = ctx->format;
 
 	ctx->in = jitter;
 
@@ -231,12 +242,15 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 static void *alsa_thread(void *arg)
 {
 	int ret;
-	int divider;
+	int divider = 2;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	switch (ctx->in->format)
 	{
 		case PCM_32bits_LE_stereo:
 			divider = 8;
+		break;
+		case PCM_24bits_LE_stereo:
+			divider = 6;
 		break;
 		case PCM_16bits_LE_stereo:
 			divider = 4;

@@ -39,6 +39,7 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	const sink_t *ops;
+	player_ctx_t *player;
 	struct pcm *playback_handle;
 	pthread_t thread;
 	jitter_t *in;
@@ -56,12 +57,13 @@ struct sink_ctx_s
 #endif
 
 static const char *jitter_name = "tinyalsa";
-static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
+static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 {
 	int ret;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = sink_tinyalsa;
+	ctx->player = player;
 
 	size_t size = 128;
 	struct pcm_config config =
@@ -76,20 +78,16 @@ static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
 	{
 		case PCM_32bits_LE_stereo:
 			config.format = PCM_FORMAT_S32_LE;
-			config.count = 4;
 		break;
-		case PCM_24bits_LE_stereo:
+		case PCM_24bits3_LE_stereo:
 			config.format = PCM_FORMAT_S24_LE;
-			config.count = 3;
 		break;
 		case PCM_16bits_LE_stereo:
 			config.format = PCM_FORMAT_S16_LE;
-			config.count = 2;
 		break;
 		case PCM_16bits_LE_mono:
 			config.format = PCM_FORMAT_S16_LE;
 			config.channels = 1;
-			config.count = 2;
 		break;
 	}
 	ctx->playback_handle = pcm_open(0, 0, PCM_OUT, &config);
@@ -117,14 +115,14 @@ static void *alsa_thread(void *arg)
 	/* start decoding */
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
 		{
-			if (player_state(ctx->ctx, STATE_UNKNOWN) == STATE_ERROR)
+			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
 				ctx->state = STATE_ERROR;
 		}
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
-		dbg("sink: play %d", ctx->in->ctx->size);
-		ret = pcm_write(ctx->playback_handle, buff, ctx->in->ctx->size);
+		dbg("sink: play %ld", ctx->in->ctx->size);
+		ret = pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size);
 		ctx->in->ops->pop(ctx->in->ctx, ret);
 		if (ret < 0)
 			ctx->state = STATE_ERROR;

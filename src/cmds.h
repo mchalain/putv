@@ -7,7 +7,7 @@ typedef void cmds_ctx_t;
 typedef struct cmds_ops_s cmds_ops_t;
 struct cmds_ops_s
 {
-	cmds_ctx_t *(*init)(player_ctx_t *, media_t *, void *arg);
+	cmds_ctx_t *(*init)(player_ctx_t *, void *arg);
 	int (*run)(cmds_ctx_t *);
 	void (*destroy)(cmds_ctx_t *);
 };
@@ -21,4 +21,5 @@ struct cmds_s
 
 extern cmds_ops_t *cmds_line;
 extern cmds_ops_t *cmds_json;
+extern cmds_ops_t *cmds_input;
 #endif

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_passthrough.c
+ * media_common.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -25,25 +25,12 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "player.h"
-typedef struct decoder_s decoder_t;
-typedef struct decoder_ops_s decoder_ops_t;
-typedef struct decoder_ctx_s decoder_ctx_t;
-struct decoder_ctx_s
-{
-	const decoder_ops_t *ops;
-	player_ctx_t *ctx;
-	jitter_t *inout;
-};
-#define DECODER_CTX
+#include "media.h"
 #include "decoder.h"
-#include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -53,41 +40,69 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
-{
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_passthrough;
+const char const *mime_octetstream = "octet/stream";
 
-	return ctx;
+const char *utils_getmime(const char *path)
+{
+#ifdef DECODER_MAD
+	if (!decoder_mad->check(path))
+		return decoder_mad->mime;
+#endif
+#ifdef DECODER_FLAC
+	if (!decoder_flac->check(path))
+		return decoder_flac->mime;
+#endif
+	return mime_octetstream;
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx)
+const char *utils_getpath(const char *url, const char *proto)
 {
-	return ctx->inout;
+	const char *path = strstr(url, proto);
+	if (path == NULL)
+	{
+		if (strstr(url, "://"))
+		{
+			return NULL;
+		}
+		path = url;
+	}
+	else
+		path += strlen(proto);
+	return path;
 }
 
-static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
+media_t *media_build(const char *url)
 {
-	ctx->inout = jitter;
-	return 0;
-}
+	const media_ops_t *const media_list[] = {
+	#ifdef MEDIA_DIR
+		media_dir,
+	#endif
+	#ifdef MEDIA_SQLITE
+		media_sqlite,
+	#endif
+	#ifdef MEDIA_FILE
+		media_file,
+	#endif
+		NULL
+	};
 
-static int decoder_check(char *path)
-{
-	return 0;
-}
+	int i = 0;
+	media_ctx_t *media_ctx = NULL;
+	while (media_list[i] != NULL)
+	{
+		media_ctx = media_list[i]->init(url);
+		if (media_ctx != NULL)
+			break;
+		i++;
+	}
+	if (media_ctx == NULL)
+	{
+		err("media not found %s", url);
+		return NULL;
+	}
+	media_t *media = calloc(1, sizeof(*media));
+	media->ops = media_list[i];
+	media->ctx = media_ctx;
 
-static void decoder_destroy(decoder_ctx_t *ctx)
-{
-	free(ctx);
+	return media;
 }
-
-const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
-{
-	.check = decoder_check,
-	.init = decoder_init,
-	.jitter = decoder_jitter,
-	.run = decoder_run,
-	.destroy = decoder_destroy,
-	.mime = "octet/stream",
-};

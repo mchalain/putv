@@ -1,9 +1,6 @@
 #ifndef __PLAYER_H__
 #define __PLAYER_H__
 
-extern const char const *mime_mp3;
-extern const char const *mime_octetstream;
-
 typedef enum
 {
 	STATE_UNKNOWN,
@@ -29,7 +26,9 @@ typedef struct media_s media_t;
 typedef struct player_ctx_s player_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
 
-player_ctx_t *player_init(media_t *media);
+player_ctx_t *player_init();
+int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop);
+media_t *player_media(player_ctx_t *ctx);
 int player_run(player_ctx_t *userdata, jitter_t *encoder_jitter);
 void player_destroy(player_ctx_t *ctx);
 int player_waiton(player_ctx_t *ctx, int state);

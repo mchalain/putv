@@ -1,0 +1,9 @@
+{
+	"jsonrpc":"2.0",
+	"method":"list",
+	"id":0,
+	"params": {
+		"first":0,
+		"max":10
+	}
+}

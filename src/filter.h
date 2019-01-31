@@ -1,14 +1,26 @@
 #ifndef __FILTER_H__
 #define __FILTER_H__
 
+#include "jitter.h"
+
+# define SIZEOF_INT 4
+
+#if SIZEOF_INT >= 4
+typedef   signed int sample_t;
+#else
+typedef   signed long sample_t;
+#endif
+
 #define MAXCHANNELS 8
 typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
-	signed int *samples[MAXCHANNELS];
+	sample_t *samples[MAXCHANNELS];
 	int nsamples;
-	int nchannels;
 	int samplerate;
+	char bitspersample;
+	char nchannels;
+	char regain;
 };
 
 #ifndef FILTER_CTX
@@ -17,7 +29,7 @@ typedef void filter_ctx_t;
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s
 {
-	filter_ctx_t *(*init)(unsigned int rate, unsigned int size, unsigned int nchannels);
+	filter_ctx_t *(*init)(unsigned int rate, jitter_format_t format);
 	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
 	void (*destroy)(filter_ctx_t *);
 };
@@ -30,4 +42,5 @@ struct filter_s
 };
 
 extern const filter_ops_t *filter_pcm;
+extern const filter_ops_t *filter_pcm_scaling;
 #endif

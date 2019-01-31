@@ -93,9 +93,8 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 #define RANDOM 0x10
 int main(int argc, char **argv)
 {
-	const char *mediapath = SYSCONFDIR"/putv.db";
+	const char *mediapath = "file://"DATADIR;
 	const char *outarg = "default";
-	media_ctx_t *media_ctx;
 	pthread_t thread;
 	const char *root = "/tmp";
 	int mode = 0;
@@ -142,41 +141,14 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_ctx = MEDIA->init(mediapath);
-	if (media_ctx == NULL)
-	{
-		err("media not found %s", mediapath);
-		return -1;
-	}
-	media_t *media = &(media_t)
-	{
-		.ops = MEDIA,
-		.ctx = media_ctx,
-	};
-
-	if (mode & SRC_STDIN)
-	{
-		dbg("insert stdin");
-		media->ops->insert(media_ctx, "-", NULL, "audio/mp3");
-	}
-
-	if (mode & LOOP)
-	{
-		media->ops->options(media_ctx, MEDIA_LOOP, 1);
-	}
-
-	if (mode & RANDOM)
-	{
-		media->ops->options(media_ctx, MEDIA_RANDOM, 1);
-	}
-
-	player_ctx_t *player = player_init(media);
+	player_ctx_t *player = player_init();
+	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
 
 	if (mode & AUTOSTART)
 	{
 		player_state(player, STATE_PLAY);
 #ifdef USE_TIMER
-		if (media->ops->current(media_ctx, NULL, NULL) != 0)
+		if (player_mediaid(player) != 0)
 		{
 			int ret;
 			struct sigevent event;
@@ -199,15 +171,20 @@ int main(int argc, char **argv)
 	if (!(mode & DAEMONIZE))
 	{
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, NULL);
 		nbcmds++;
 	}
+#endif
+#ifdef CMDINPUT
+	cmds[nbcmds].ops = cmds_input;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, CMDINPUT_PATH);
+	nbcmds++;
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, (void *)socketpath);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, (void *)socketpath);
 	nbcmds++;
 #endif
 
@@ -223,6 +200,12 @@ int main(int argc, char **argv)
 	sink_ctx = sink->init(player, outarg);
 	sink->run(sink_ctx);
 	sink_jitter = sink->jitter(sink_ctx);
+
+#ifdef USE_REALTIME
+	struct sched_param params;
+	params.sched_priority = 50;
+	sched_setscheduler(0, REALTIME_SCHED, &params);
+#endif
 
 	run_player(player, sink_jitter);
 

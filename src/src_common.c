@@ -1,5 +1,5 @@
 /*****************************************************************************
- * src_file.c
+ * src_alsa.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -25,30 +25,20 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 #include <errno.h>
-
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/ioctl.h>
 #include <pwd.h>
 
 #include "player.h"
-typedef struct src_ops_s src_ops_t;
-typedef struct src_ctx_s src_ctx_t;
-struct src_ctx_s
-{
-	const src_ops_t *ops;
-	int fd;
-	player_ctx_t *ctx;
-	jitter_t *out;
-};
-#define SRC_CTX
+#include "decoder.h"
 #include "src.h"
-#include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -60,87 +50,72 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 {
-	int ret = 0;
-	if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
-	{
-		return 0;
-	}
-	ret = read(ctx->fd, buff, len);
-	src_dbg("src: read %d", ret);
-	if (ret < 0)
-		err("src file %d error: %s", ctx->fd, strerror(errno));
-	if (ret == 0)
-	{
-		ctx->out->ops->flush(ctx->out->ctx);
-		dbg("src: end of file");
-	}
-	return ret;
-}
+	const src_ops_t *const src_list[] = {
+	#ifdef SRC_FILE
+		src_file,
+	#endif
+	#ifdef SRC_UNIX
+		src_unix,
+	#endif
+	#ifdef SRC_CURL
+		src_curl,
+	#endif
+		NULL
+	};
 
-static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
-{
-	int fd;
-	const char *path = NULL;
-	if (!strcmp(url, "-"))
-		fd = 0;
-	else
+	const src_ops_t *src_default = NULL;
+	#if defined(SRC_FILE)
+	src_default = src_file;
+	#elif defined(SRC_UNIX)
+	src_default = src_unix;
+	#elif defined(SRC_CURL)
+	src_default = src_curl;
+	#endif
+
+	int i = 0;
+	src_ctx_t *src_ctx = NULL;
+	while (src_list[i] != NULL)
 	{
-		if (strstr(url, "://") != NULL)
+		const char *protocol = src_list[i]->protocol;
+		int len = strlen(protocol);
+		while (protocol != NULL)
 		{
-			path = strstr(url, "file://") + 7;
+			const char *next = strchr(protocol,'|');
+			if (next != NULL)
+				len = next - protocol;
+			if (!(strncmp(url, protocol, len)))
+			{
+				src_ctx = src_list[i]->init(player, url);
+				src_default = src_list[i];
+				break;
+			}
+			protocol = next;
+			if (protocol)
+			{
+				protocol++;
+				len = strlen(protocol);
+			}
 		}
-		else
-		{
-			path = url;
-		}
-		if (path[0] == '~')
-		{
-			struct passwd *pw = NULL;
-			pw = getpwuid(geteuid());
-			chdir(pw->pw_dir);
-			path++;
-			if (path[0] == '/')
-				path++;
-		}
-		if (path != NULL)
-			fd = open(path, O_RDONLY);
+		if (src_ctx != NULL)
+			break;
+		i++;
 	}
-	if (fd >= 0)
+
+	if (src_ctx == NULL && src_default != NULL)
 	{
-		src_ctx_t *src = calloc(1, sizeof(*src));
-		src->ops = src_file;
-		src->fd = fd;
-		src->ctx = ctx;
-		return src;
+		src_ctx = src_default->init(player, url);
 	}
-	if (path != NULL)
-		err("src file %s error: %s", path, strerror(errno));
-	else
-		err("src file %s error: %s", url, strerror(errno));
-	return NULL;
-}
+	if (src_ctx == NULL)
+	{
+		err("src not found %s", url);
+		return NULL;
+	}
+	src_t *src = calloc(1, sizeof(*src));
+	src->ops = src_default;
+	src->ctx = src_ctx;
 
-static int src_run(src_ctx_t *ctx, jitter_t *jitter)
-{
-	dbg("src: add producter to %s", jitter->ctx->name);
-	ctx->out = jitter;
-	jitter->ctx->produce = (produce_t)src_read;
-	jitter->ctx->producter = (void *)ctx;
-	return 0;
+	src->audio[0] = decoder_build(player, mime);
+	return src;
 }
-
-static void src_destroy(src_ctx_t *src)
-{
-	close(src->fd);
-	free(src);
-}
-
-const src_ops_t *src_file = &(src_ops_t)
-{
-	.protocol = "file://",
-	.init = src_init,
-	.run = src_run,
-	.destroy = src_destroy,
-};

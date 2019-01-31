@@ -42,13 +42,16 @@ typedef enum
 {
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,
-	PCM_24bits_LE_stereo,
+	PCM_24bits3_LE_stereo,
+	PCM_24bits4_LE_stereo,
 	PCM_32bits_LE_stereo,
 	PCM_32bits_BE_stereo,
+	MPEG2_3_MP3,
+	FLAC,
 	MPEG2_1,
 	MPEG2_2,
-	MPEG2_3_MP3,
 	DVB_frame,
+	SINK_BITSSTREAM,
 } jitter_format_t;
 
 typedef struct jitter_s jitter_t;

@@ -34,11 +34,22 @@
 #include "player.h"
 #include "media.h"
 
+typedef struct media_url_s media_url_t;
+
 struct media_ctx_s
 {
-	const char *url;
-	int mediaid;
+	media_url_t *media;
+	media_url_t *current;
 	unsigned int options;
+};
+
+struct media_url_s
+{
+	char *url;
+	char *info;
+	const char *mime;
+	int id;
+	media_url_t *next;
 };
 
 #define OPTION_LOOP 0x0001
@@ -55,45 +66,89 @@ struct media_ctx_s
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
-
-static const char *utils_getmime(const char *path)
-{
-	char *ext = strrchr(path, '.');
-	if (!strcmp(ext, ".mp3"))
-		return mime_mp3;
-	return mime_octetstream;
-}
 
 static int media_count(media_ctx_t *ctx)
 {
 	return 1;
 }
 
+static media_url_t *_media_find(media_ctx_t *ctx, int id)
+{
+	media_url_t *media = ctx->media;
+	int i = 0;
+	while (i < id && media != NULL)
+	{
+		media = media->next;
+		i++;
+	}
+	return media;
+}
+
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
-	ctx->url = path;
+	int id = 0;
+	media_url_t *media = ctx->media;
+	if (media == NULL)
+	{
+		media = calloc(1, sizeof(*media));
+		ctx->media = media;
+	}
+	else
+	{
+		while (media->next != NULL)
+		{
+			media = media->next;
+			id ++;
+		}
+		media->next = calloc(1, sizeof(*media));
+		media = media->next;
+		id++;
+	}
+	media->url = strdup(path);
+	if (info)
+		media->info = strdup(info);
+	if (mime)
+		media->mime = mime;
+	else
+		media->mime = utils_getmime(path);
+	media->id = id;
 	return 0;
 }
 
 static int media_remove(media_ctx_t *ctx, int id, const char *path)
 {
-	return -1;
+	media_url_t *media = _media_find(ctx, id);
+	if (media != NULL)
+	{
+		free(media->url);
+		free(media->info);
+	}
+	return 0;
 }
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
-	if (cb != NULL && cb(data, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
-		return -1;
+	media_url_t *media = NULL;
+	if (id != -1)
+	{
+		media = _media_find(ctx, id);
+		if (media == NULL || (cb != NULL && cb(data, media->id, media->url, media->info, media->mime) < 0))
+			return -1;
+	}
+	else
+	{
+		media_url_t *media = ctx->media;
+		while (media != NULL)
+		{
+			if (cb != NULL && cb(data, media->id, media->url, media->info, media->mime) < 0)
+				return -1;
+			media = media->next;
+		}
+	}
 	return 1;
-}
-
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data)
-{
-	return media_find(ctx, ctx->mediaid, cb, data);
 }
 
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
@@ -104,26 +159,36 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
-
-	if (ctx->mediaid == 1 && ctx->url != NULL)
+	if (ctx->current != NULL)
 	{
-		ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
+		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
+		if (ret > -1)
+			ret = ctx->current->id;
 	}
-	return ctx->mediaid;
+	return ret;
 }
 
 static int media_next(media_ctx_t *ctx)
 {
-	if ((ctx->mediaid == 1) && !(ctx->options & OPTION_LOOP))
-		media_end(ctx);
+	int ret = -1;
+	if (ctx->current != NULL)
+		ctx->current = ctx->current->next;
 	else
-		ctx->mediaid = 1;
-	return ctx->mediaid;
+		ctx->current = ctx->media;
+	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
+	{
+		dbg("media loop");
+		ctx->current = ctx->media;
+	}
+
+	if (ctx->current != NULL)
+		ret = ctx->current->id;
+	return ret;
 }
 
 static int media_end(media_ctx_t *ctx)
 {
-	ctx->mediaid = -1;
+	ctx->current = NULL;
 	return 0;
 }
 
@@ -157,31 +222,36 @@ static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)
 	{
 		ctx = calloc(1, sizeof(*ctx));
-		ctx->mediaid = 0;
-		ctx->url = url;
+		media_insert(ctx, url, NULL, utils_getmime(url));
 	}
 	return ctx;
 }
 
 static void media_destroy(media_ctx_t *ctx)
 {
+	media_url_t *media = ctx->media;
+	while (media != NULL)
+	{
+		media_url_t *tofree = media;
+		media = media->next;
+		free(tofree);
+	}
 	free(ctx);
 }
 
-media_ops_t *media_file = &(media_ops_t)
+const media_ops_t *media_file = &(const media_ops_t)
 {
 	.init = media_init,
 	.destroy = media_destroy,
 	.next = media_next,
 	.play = media_play,
 	.list = media_list,
-	.current = media_current,
 	.find = media_find,
 	.remove = media_remove,
 	.insert = media_insert,

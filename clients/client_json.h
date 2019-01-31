@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_passthrough.c
+ * main.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -25,69 +25,34 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <stdlib.h>
+#ifndef __CLIENT_JSON_H__
+#define __CLIENT_JSON_H__
 
-#include "player.h"
-typedef struct decoder_s decoder_t;
-typedef struct decoder_ops_s decoder_ops_t;
-typedef struct decoder_ctx_s decoder_ctx_t;
-struct decoder_ctx_s
+typedef int (*client_event_prototype_t)(void *data, json_t *params);
+typedef struct client_event_s client_event_t;
+typedef struct client_data_s client_data_t;
+struct client_data_s
 {
-	const decoder_ops_t *ops;
-	player_ctx_t *ctx;
-	jitter_t *inout;
+	int sock;
+	client_event_t *events;
+	unsigned long int pid;
+	client_event_prototype_t proto;
+	void *data;
+	enum
+	{
+		OPTION_ASYNC = 0x01,
+	} options;
+	pthread_cond_t cond;
+	pthread_mutex_t mutex;
 };
-#define DECODER_CTX
-#include "decoder.h"
-#include "jitter.h"
 
-#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#ifdef DEBUG
-#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#else
-#define dbg(...)
+int client_unix(const char *socketpath, client_data_t *data);
+int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata);
+int client_loop(client_data_t *data);
+
+int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata);
+int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata);
+int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata);
+int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
+
 #endif
-
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
-{
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_passthrough;
-
-	return ctx;
-}
-
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx)
-{
-	return ctx->inout;
-}
-
-static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
-{
-	ctx->inout = jitter;
-	return 0;
-}
-
-static int decoder_check(char *path)
-{
-	return 0;
-}
-
-static void decoder_destroy(decoder_ctx_t *ctx)
-{
-	free(ctx);
-}
-
-const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
-{
-	.check = decoder_check,
-	.init = decoder_init,
-	.jitter = decoder_jitter,
-	.run = decoder_run,
-	.destroy = decoder_destroy,
-	.mime = "octet/stream",
-};

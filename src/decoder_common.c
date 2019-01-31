@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_passthrough.c
+ * decoder_mad.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -25,25 +25,15 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#include <stdio.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <pthread.h>
+#include <errno.h>
 #include <stdlib.h>
 
 #include "player.h"
-typedef struct decoder_s decoder_t;
-typedef struct decoder_ops_s decoder_ops_t;
-typedef struct decoder_ctx_s decoder_ctx_t;
-struct decoder_ctx_s
-{
-	const decoder_ops_t *ops;
-	player_ctx_t *ctx;
-	jitter_t *inout;
-};
-#define DECODER_CTX
 #include "decoder.h"
-#include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -53,41 +43,33 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
-{
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_passthrough;
+#define decoder_dbg(...)
 
-	return ctx;
+decoder_t *decoder_build(player_ctx_t *player, const char *mime)
+{
+	decoder_t *decoder = NULL;
+	const decoder_ops_t *ops = NULL;
+	decoder_ctx_t *ctx = NULL;
+#ifdef DECODER_MAD
+	if (mime && !strcmp(mime, decoder_mad->mime))
+		ops = decoder_mad;
+#endif
+#ifdef DECODER_FLAC
+	if (mime && !strcmp(mime, decoder_flac->mime))
+		ops = decoder_flac;
+#endif
+	if (ops == NULL)
+		ops = DECODER;
+
+	if (ops != NULL)
+	{
+		ctx = ops->init(player);
+	}
+	if (ctx != NULL)
+	{
+		decoder = calloc(1, sizeof(*decoder));
+		decoder->ops = ops;
+		decoder->ctx = ctx;
+	}
+	return decoder;
 }
-
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx)
-{
-	return ctx->inout;
-}
-
-static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
-{
-	ctx->inout = jitter;
-	return 0;
-}
-
-static int decoder_check(char *path)
-{
-	return 0;
-}
-
-static void decoder_destroy(decoder_ctx_t *ctx)
-{
-	free(ctx);
-}
-
-const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
-{
-	.check = decoder_check,
-	.init = decoder_init,
-	.jitter = decoder_jitter,
-	.run = decoder_run,
-	.destroy = decoder_destroy,
-	.mime = "octet/stream",
-};

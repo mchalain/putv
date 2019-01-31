@@ -47,7 +47,8 @@ struct encoder_ctx_s
 	const encoder_t *ops;
 	lame_global_flags *encoder;
 	unsigned int samplerate;
-	unsigned int nchannels;
+	unsigned char nchannels;
+	unsigned char samplesize;
 	int samplesframe;
 	int dumpfd;
 	pthread_t thread;
@@ -108,6 +109,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
+	ctx->samplesize = sizeof(signed short);
 
 	encoder_lame_init(ctx);
 #ifdef LAME_DUMP
@@ -116,7 +118,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	//ctx->samplesframe = lame_get_framesize(ctx->encoder);
 	ctx->samplesframe = 576;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
-				ctx->samplesframe * sizeof(signed short) * ctx->nchannels);
+				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
@@ -136,16 +138,21 @@ static void *lame_thread(void *arg)
 	int run = 1;
 	encoder_ctx_t *ctx = (encoder_ctx_t *)arg;
 	/* start decoding */
+#ifdef HEARTBEAT
+	clockid_t clockid = CLOCK_REALTIME;
+	struct timespec start = {0, 0};
+	clock_gettime(clockid, &start);
+#endif
 	while (run)
 	{
 		int ret = 0;
 
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
-		inlength /= sizeof(short int) * ctx->nchannels;
+		inlength /= ctx->samplesize * ctx->nchannels;
 		ctx->nsamples += inlength;
 		if (inlength < ctx->samplesframe)
-			warn("encoder lame: frame too small %d %d %d", inlength, ctx->nsamples, ctx->in->ctx->size);
+			warn("encoder lame: frame too small %d %ld %ld", inlength, ctx->nsamples, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
@@ -171,7 +178,10 @@ static void *lame_thread(void *arg)
 		}
 		else
 		{
+			dbg("encoder lame flush");
 			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
+			/* TODO : request media data from player to set new ID3 tag */
+			lame_init_bitstream(ctx->encoder);
 		}
 		if (ret > 0)
 		{
@@ -196,13 +206,25 @@ static void *lame_thread(void *arg)
 		if (ret < 0)
 		{
 			if (ret == -1)
-				err("lame error %d, not enought memory %d", ret, ctx->out->ctx->size);
+				err("lame error %d, not enought memory %ld", ret, ctx->out->ctx->size);
 			else
 				err("lame error %d", ret);
 			run = 0;
 		}
 	}
-	return (void *)result;
+#ifdef HEARTBEAT
+	struct timespec stop = {0, 0};
+	clock_gettime(clockid, &stop);
+	stop.tv_sec -= start.tv_sec;
+	stop.tv_nsec -= start.tv_nsec;
+	if (stop.tv_nsec < 0)
+	{
+		stop.tv_nsec += 1000000000;
+		stop.tv_sec -= 1;
+	}
+	dbg("encode during %lu.%lu", stop.tv_sec, stop.tv_nsec);
+#endif
+	return (void *)(intptr_t)result;
 }
 
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)

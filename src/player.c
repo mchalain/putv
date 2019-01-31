@@ -27,9 +27,11 @@
  *****************************************************************************/
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+
+#define __USE_GNU
+#include <pthread.h>
 
 #include "player.h"
 #include "media.h"
@@ -47,6 +49,15 @@
 #define dbg(...)
 #endif
 
+typedef struct player_decoder_s player_decoder_t;
+
+struct player_decoder_s
+{
+	decoder_t *decoder;
+	const src_t *src;
+	int mediaid;
+};
+
 typedef struct player_event_s player_event_t;
 struct player_event_s
 {
@@ -59,26 +70,59 @@ struct player_event_s
 struct player_ctx_s
 {
 	media_t *media;
-	int mediaid;
+	media_t *nextmedia;
 	state_t state;
 	player_event_t *events;
+	player_decoder_t *current;
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 };
 
-const char const *mime_mp3 = "audio/mp3";
-const char const *mime_octetstream = "octet/stream";
-
-player_ctx_t *player_init(media_t *media)
+player_ctx_t *player_init()
 {
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
-	ctx->media = media;
 	ctx->state = STATE_STOP;
 	return ctx;
 }
 
+int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop)
+{
+	media_t *media = media_build(mediapath);
+	if (media)
+	{
+		ctx->nextmedia = media;
+		ctx->state != STATE_STOP;
+		if (loop)
+		{
+			media->ops->options(media->ctx, MEDIA_LOOP, 1);
+		}
+
+		if (random)
+		{
+			media->ops->options(media->ctx, MEDIA_RANDOM, 1);
+		}
+		if (ctx->media == NULL)
+			ctx->media = media;
+	}
+	return 0;
+}
+
+void player_next(player_ctx_t *ctx)
+{
+	if (ctx->media != NULL)
+	{
+		ctx->media->ops->next(ctx->media->ctx);
+		player_state(ctx, STATE_CHANGE);
+	}
+}
+
+media_t *player_media(player_ctx_t *ctx)
+{
+	return ctx->media;
+}
+	
 void player_destroy(player_ctx_t *ctx)
 {
 	player_state(ctx, STATE_ERROR);
@@ -120,7 +164,11 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 
 int player_mediaid(player_ctx_t *ctx)
 {
-	return ctx->mediaid;
+	if (ctx->current != NULL)
+	{
+		return ctx->current->mediaid;
+	}
+	return -1;
 }
 
 int player_waiton(player_ctx_t *ctx, int state)
@@ -138,50 +186,32 @@ int player_waiton(player_ctx_t *ctx, int state)
 	return 0;
 }
 
-struct _player_decoder_s
-{
-	const decoder_t *decoder;
-	decoder_ctx_t *decoder_ctx;
-	const src_t *src;
-	src_ctx_t *src_ctx;
-};
-
 struct _player_play_s
 {
 	player_ctx_t *ctx;
-	struct _player_decoder_s *dec;
+	player_decoder_t *dec;
 };
 
-static int _player_play(void* arg, const char *url, const char *info, const char *mime)
+static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
-	struct _player_play_s *player = (struct _player_play_s *)arg;
-	player_ctx_t *ctx = player->ctx;
-	struct _player_decoder_s *dec;
+	struct _player_play_s *data = (struct _player_play_s *)arg;
+	player_ctx_t *player = data->ctx;
+	src_t *src = NULL;
 
-	dec = calloc(1, sizeof(*dec));
-	dec->src = SRC;
-#ifdef DECODER_MAD
-	if (mime && !strcmp(mime, mime_mp3))
-		dec->decoder = decoder_mad;
-#endif
-	if (dec->decoder == NULL)
-		dec->decoder = DECODER;
-
-	if (dec->decoder != NULL)
+	dbg("player: prepare %d %s", id, url);
+	src = src_build(player, url, mime);
+	if (src != NULL)
 	{
-		dec->decoder_ctx = dec->decoder->init(ctx);
-		dbg("player: prepare %s", url);
-		dec->src_ctx = dec->src->init(ctx, url);
-	}
-	if (dec->src_ctx != NULL)
-	{
-		player->dec = dec;
+		data->dec = calloc(1, sizeof(*data->dec));
+		data->dec->mediaid = id;
+		data->dec->src = src;
+		data->dec->decoder = src->audio[0];
 		return 0;
 	}
 	else
 	{
-		player->dec = NULL;
-		free(dec);
+		dbg("player: src not found for %s", url);
+		data->dec = NULL;
 	}
 	return -1;
 }
@@ -193,7 +223,6 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		.ctx = ctx,
 		.dec = NULL,
 	};
-	struct _player_decoder_s *current_dec = NULL;
 	while (ctx->state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
@@ -204,32 +233,51 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
 		pthread_mutex_unlock(&ctx->mutex);
+		if (ctx->media != ctx->nextmedia)
+		{
+			if (ctx->media)
+			{
+				ctx->media->ops->destroy(ctx->media->ctx);
+				free(ctx->media);
+			}
+			ctx->media = ctx->nextmedia;
+		}
+		if (ctx->media == NULL)
+			break;
 		ctx->media->ops->next(ctx->media->ctx);
 
 		do
 		{
 			player.dec = NULL;
-			int nextid = ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
-			if (current_dec != NULL)
+			ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
+			if (ctx->current != NULL)
 			{
 				dbg("player: wait");
-				current_dec->decoder->destroy(current_dec->decoder_ctx);
-				current_dec->src->destroy(current_dec->src_ctx);
-				free(current_dec);
-				current_dec = NULL;
+				ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
+				ctx->current->src->ops->destroy(ctx->current->src->ctx);
+				free(ctx->current);
+				ctx->current = NULL;
 			}
-			ctx->mediaid = nextid;
 			if (ctx->state != STATE_STOP && player.dec != NULL)
 			{
-				current_dec = player.dec;
+				ctx->current = player.dec;
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
-				current_dec->decoder->run(current_dec->decoder_ctx, encoder_jitter);
-				current_dec->src->run(current_dec->src_ctx, current_dec->decoder->jitter(current_dec->decoder_ctx));
+				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
+				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
-			else
+			else {
+				if (player.dec != NULL)
+				{
+					ctx->current = player.dec;
+					ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
+					ctx->current->src->ops->destroy(ctx->current->src->ctx);
+					free(ctx->current);
+					ctx->current = NULL;
+				}
 				player_state(ctx, STATE_STOP);
+			}
 			player_event_t *it = ctx->events;
 			while (it != NULL)
 			{

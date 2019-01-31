@@ -36,11 +36,11 @@
 #include "jitter.h"
 #include "filter.h"
 typedef struct src_s src_t;
+typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
-	const src_t *ops;
 	const char *soundcard;
 	snd_pcm_t *handle;
 	pthread_t thread;
@@ -131,7 +131,7 @@ pcm_format = SND_PCM_FORMAT_S16;
 	snd_pcm_uframes_t buffer_size;
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
 	dbg("buffer size %lu", buffer_size);
-	dbg("sample rate %lu", rate);
+	dbg("sample rate %u", rate);
 	snd_pcm_uframes_t periodsize;
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
 	dbg("period size %lu", periodsize);
@@ -167,7 +167,6 @@ static src_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	int count = 2;
 	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
-	ctx->ops = src_alsa;
 	ctx->soundcard = soundcard;
 
 	ctx->player = player;
@@ -187,7 +186,7 @@ static void *alsa_thread(void *arg)
 			ctx->samplesize = 4;
 			ctx->nchannels = 2;
 		break;
-		case PCM_24bits_LE_stereo:
+		case PCM_24bits3_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S24_LE;
 			ctx->samplesize = 3;
 			ctx->nchannels = 2;
@@ -257,7 +256,7 @@ dbg("hello 4");
 #ifdef LBENDIAN
 			ret = snd_pcm_readi(ctx->handle, buff2, ret);
 #else
-dbg("buff %lu %lu", ctx->out->ctx->size, ret * 4);
+dbg("buff %lu %u", ctx->out->ctx->size, ret * 4);
 			ret = snd_pcm_readi(ctx->handle, buff, ret);
 #endif
 		}
@@ -307,17 +306,10 @@ static void alsa_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
-const src_t *src_alsa = &(src_t)
+const src_ops_t *src_alsa = &(src_ops_t)
 {
+	.protocol = "pcm://",
 	.init = alsa_init,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 };
-
-#ifndef SRC_GET
-#define SRC_GET
-const src_t *src_get(src_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

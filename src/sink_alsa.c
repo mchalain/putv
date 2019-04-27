@@ -195,19 +195,13 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	if (*size > 0)
 	{
 		int dir = 0;
-		periodsize = *size;
-		buffersize = (*size * NB_BUFFER) / (ctx->samplesize * ctx->nchannels);// in number of frames
+		buffersize = *size;
+		periodsize = (*size / NB_BUFFER);
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
+		dbg("try setting %ld %ld", periodsize, buffersize);
 		if (ret < 0)
 		{
 			err("sink: buffer_size");
-			goto error;
-		}
-
-		ret = snd_pcm_hw_params_set_periods(ctx->playback_handle, hw_params, NB_BUFFER, 0);
-		if (ret < 0)
-		{
-			err("sink: periods");
 			goto error;
 		}
 
@@ -217,6 +211,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 			err("sink: period_size");
 			goto error;
 		}
+		dbg("set %ld %ld", periodsize, buffersize);
 	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);
@@ -240,8 +235,6 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		ctx->samplesize,
 		ctx->nchannels);
 	ctx->buffersize = periodsize * ctx->samplesize * ctx->nchannels;
-	*size = periodsize * ctx->samplesize * ctx->nchannels;
-	ctx->buffersize = (buffersize * ctx->samplesize * ctx->nchannels) / NB_BUFFER;
 	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
@@ -290,7 +283,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 #endif
 
-	unsigned int size = LATENCE_MS * samplerate * 4 * 2 / 1000;
+	unsigned int size = LATENCE_MS * samplerate / 1000;
 	if (_pcm_open(ctx, format, samplerate, &size) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
@@ -350,7 +343,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	return ret;
 }
 
-static void *alsa_thread(void *arg)
+static void *sink_thread(void *arg)
 {
 	int ret;
 	int divider = 2;
@@ -450,7 +443,7 @@ static int alsa_run(sink_ctx_t *ctx)
 	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
 	pthread_attr_destroy(&attr);
 #else
-	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
 #endif
 	return 0;
 }

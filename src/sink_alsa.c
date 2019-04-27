@@ -75,6 +75,14 @@ struct sink_ctx_s
 #define SINK_PRIORITY 65
 #endif
 
+#ifndef ALSA_MIXER
+#ifdef SINK_ALSA_MIXER_CH
+#define ALSA_MIXER SINK_ALSA_MIXER_CH
+#else
+#define ALSA_MIXER "Master"
+#endif
+#endif
+
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 {
@@ -301,7 +309,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 
     snd_mixer_selem_id_alloca(&sid);
     snd_mixer_selem_id_set_index(sid, 0);
-    snd_mixer_selem_id_set_name(sid, "Master");
+    snd_mixer_selem_id_set_name(sid, ALSA_MIXER);
     ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
 #endif
 	

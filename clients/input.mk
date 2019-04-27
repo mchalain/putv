@@ -1,0 +1,12 @@
+bin-y+=input
+input_SOURCES+=input.c
+input_SOURCES+=client_json.c
+input_CFLAGS+=-I../lib/jsonrpc
+input_CFLAGS+=-DUSE_INOTIFY
+input_LDFLAGS+=-L../lib/jsonrpc
+input_LIBS+=jansson pthread
+input_LIBRARY+=jsonrpc
+input_LIBS-$(USE_LIBINPUT)+=udev input
+input_CFLAGS-$(USE_LIBINPUT)+=-DUSE_LIBINPUT
+input_CFLAGS-$(JSONRPC_LARGEPACKET)+=-DJSONRPC_LARGEPACKET
+input_CFLAGS-$(DEBUG)+=-g -DDEBUG

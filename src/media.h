@@ -23,6 +23,13 @@ typedef struct media_ctx_s media_ctx_t;
 
 typedef int (*media_parse_t)(void *arg, int id, const char *url, const char *info, const char *mime);
 
+typedef enum option_state_e
+{
+	OPTION_REQUEST = -1,
+	OPTION_DISABLE,
+	OPTION_ENABLE,
+} option_state_t;
+
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
 {
@@ -70,11 +77,11 @@ struct media_ops_s
 	/**
 	 * optional
 	 */
-	void (*random)(media_ctx_t *ctx, int enable);
+	option_state_t (*random)(media_ctx_t *ctx, option_state_t enable);
 	/**
 	 * optional
 	 */
-	void (*loop)(media_ctx_t *ctx, int enable);
+	option_state_t (*loop)(media_ctx_t *ctx, option_state_t enable);
 };
 
 typedef struct media_s media_t;

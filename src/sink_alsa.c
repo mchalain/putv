@@ -41,6 +41,7 @@ struct sink_ctx_s
 	player_ctx_t *player;
 	char *soundcard;
 	snd_pcm_t *playback_handle;
+	char *mixerch;
 	snd_mixer_t *mixer;
 	snd_mixer_elem_t* mixerchannel;
 
@@ -82,6 +83,8 @@ struct sink_ctx_s
 #define ALSA_MIXER "Master"
 #endif
 #endif
+
+const sink_ops_t *sink_alsa;
 
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
@@ -273,21 +276,38 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
 	ctx->soundcard = strdup(soundcard);
+	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
 	char *setting = strchr(ctx->soundcard, ':');
-	if (setting != NULL)
+	while (setting != NULL)
 	{
 		*setting = '\0';
 		setting++;
-		if (!strncmp(setting, "16le", 4))
-			format = PCM_16bits_LE_stereo;
-		if (!strncmp(setting, "24le", 4))
-			format = PCM_24bits4_LE_stereo;
-		if (!strncmp(setting, "32le", 4))
-			format = PCM_32bits_LE_stereo;
-		setting = strchr(ctx->soundcard, ',');
-		if (setting != NULL)
-			samplerate = atoi(++setting);
+		if (setting == NULL)
+			break;
+		if (!strncmp(setting, "format=", 7))
+		{
+			setting += 7;
+			if (!strncmp(setting, "16le", 4))
+				format = PCM_16bits_LE_stereo;
+			if (!strncmp(setting, "24le", 4))
+				format = PCM_24bits4_LE_stereo;
+			if (!strncmp(setting, "32le", 4))
+				format = PCM_32bits_LE_stereo;
+			setting = strchr(setting, ',');
+		}
+		if (!strncmp(setting, "samplerate=", 11))
+		{
+			setting += 11;
+			samplerate = atoi(setting);
+			setting = strchr(setting, ',');
+		}
+		if (!strncmp(setting, "mixer=", 6))
+		{
+			setting += 6;
+			ctx->mixerch = setting;
+			setting = strchr(setting, ',');
+		}
 	}
 #endif
 
@@ -300,19 +320,27 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 
 #ifdef SINK_ALSA_MIXER
-    snd_mixer_selem_id_t *sid;
+	snd_mixer_selem_id_t *sid;
 
-    snd_mixer_open(&ctx->mixer, 0);
-    snd_mixer_attach(ctx->mixer, ctx->soundcard);
-    snd_mixer_selem_register(ctx->mixer, NULL, NULL);
-    snd_mixer_load(ctx->mixer);
+	snd_mixer_open(&ctx->mixer, 0);
+	snd_mixer_attach(ctx->mixer, ctx->soundcard);
+	snd_mixer_selem_register(ctx->mixer, NULL, NULL);
+	snd_mixer_load(ctx->mixer);
 
-    snd_mixer_selem_id_alloca(&sid);
-    snd_mixer_selem_id_set_index(sid, 0);
-    snd_mixer_selem_id_set_name(sid, ALSA_MIXER);
-    ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
+	snd_mixer_selem_id_alloca(&sid);
+	snd_mixer_selem_id_set_index(sid, 0);
+	snd_mixer_selem_id_set_name(sid, ctx->mixerch);
+	ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
+	if (ctx->mixerchannel == NULL)
+	{
+		warn("sink: alsa mixer not found %s", ctx->mixerch);
+		sink_ops_t *ops = (sink_ops_t *)sink_alsa;
+		ops->getvolume = NULL;
+		ops->setvolume = NULL;
+	}
 #endif
-	
+
+	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
 #ifdef SAMPLERATE_AUTO
 	jitter->ctx->frequence = 0;
@@ -477,34 +505,19 @@ const sink_ops_t *sink_alsa = &(sink_ops_t)
 	.jitter = alsa_jitter,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
-};
 
 #ifdef SINK_ALSA_MIXER
-const sink_ops_t *sink_alsa_mixer = &(sink_ops_t)
-{
-	.init = alsa_init,
-	.jitter = alsa_jitter,
-	.run = alsa_run,
-	.destroy = alsa_destroy,
-
 	.getvolume = _mixer_getvolume,
 	.setvolume = _mixer_setvolume,
-};
 #endif
+};
 
 static sink_t _sink = {0};
 sink_t *sink_build(player_ctx_t *player, const char *arg)
 {
 	const sink_ops_t *sinkops = NULL;
-#ifdef SINK_ALSA_MIXER
-	sinkops = sink_alsa_mixer;
+	sinkops = sink_alsa;
 	_sink.ctx = sinkops->init(player, arg);
-	if (_sink.ctx == NULL)
-#endif
-	{
-		sinkops = sink_alsa;
-		_sink.ctx = sinkops->init(player, arg);
-	}
 	if (_sink.ctx == NULL)
 		return NULL;
 	_sink.ops = sinkops;

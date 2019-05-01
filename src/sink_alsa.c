@@ -89,22 +89,24 @@ const sink_ops_t *sink_alsa;
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 {
-    long min, max;
-    snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
+	long min = 0, max = 0;
+	snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
 	if (volume > 100)
 		volume == 100;
-    snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, volume * max / 100);
+	long lvolume = volume * (max - min) / 100 + min;
+	snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, lvolume);
 }
 
 unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 {
-	long volume;
-    long min, max;
+	long volume = 0;
+	long min = 0, max = 0;
 
-    snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
-    snd_mixer_selem_get_playback_volume(ctx->mixerchannel, 0, &volume);
+	snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
+	snd_mixer_selem_get_playback_volume(ctx->mixerchannel, 0, &volume);
 
-    return (unsigned int) volume * 100 / max;
+	dbg("sink: alsa volume %ld < %ld < %ld", min, volume, max);
+	return (unsigned int) (volume - min) * 100 / (max - min);
 }
 #endif
 

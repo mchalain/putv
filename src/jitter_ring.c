@@ -329,7 +329,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	{
 		jitter_dbg("jitter %s pop B %ld/%d %p %p", jitter->name, len, private->level, private->in, private->out);
 	}
-	if (private->level <= 0)
+	if (private->level <= jitter->size)
 		private->state = JITTER_FILLING;
 }
 

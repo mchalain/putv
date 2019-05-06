@@ -94,6 +94,9 @@ struct media_s
 media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
 
+typedef struct json_t json_t;
+int media_parseid3tag(const char *path, json_t *object);
+
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;
 extern const media_ops_t *media_dir;

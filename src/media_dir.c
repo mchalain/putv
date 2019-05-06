@@ -41,15 +41,10 @@
 #include <sys/inotify.h>
 #endif
 
-#ifdef USE_ID3TAG
-#include <id3tag.h>
-#include "jsonrpc.h"
-#endif
+#include <jansson.h>
 
 #include "player.h"
 #include "media.h"
-
-#define N_(string) string
 
 #define MINCOUNT 50
 
@@ -134,51 +129,10 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 
 		object = json_object();
 
-#if defined(USE_ID3TAG)
+#ifdef USE_ID3TAG
 		if (mime && !strcmp(mime, mime_audiomp3))
 		{
-			static struct
-			{
-				char const *id;
-				char const *label;
-			} const labels[] = 
-			{
-			{ ID3_FRAME_TITLE,  N_("Title")     },
-			{ ID3_FRAME_ARTIST, N_("Artist")    },
-			{ ID3_FRAME_ALBUM,  N_("Album")     },
-			{ ID3_FRAME_TRACK,  N_("Track")     },
-			{ ID3_FRAME_YEAR,   N_("Year")      },
-			{ ID3_FRAME_GENRE,  N_("Genre")     },
-			};
-			struct id3_file *fd = id3_file_open(path + PROTOCOLNAME_LENGTH, ID3_FILE_MODE_READONLY);
-			struct id3_tag *tag = id3_file_tag(fd);
-
-			int i;
-			for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
-			{
-				struct id3_frame const *frame;
-				frame = id3_tag_findframe(tag, labels[i].id, 0);
-				if (frame)
-				{
-					union id3_field const *field;
-					id3_ucs4_t const *ucs4;
-					field    = id3_frame_field(frame, 1);
-					ucs4 = id3_field_getstrings(field, 0);
-					if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
-						ucs4 = id3_genre_name(ucs4);
-					json_t *value;
-					if (ucs4 != NULL)
-					{
-						char *latin1 = id3_ucs4_utf8duplicate(ucs4);
-						value = json_string(latin1);
-						free(latin1);
-					}
-					else
-						value = json_null();
-					json_object_set(object, labels[i].label, value);
-				}
-			}
-			id3_file_close(fd);
+			media_parseid3tag(path + PROTOCOLNAME_LENGTH, object);
 		}
 #endif
 		info = json_dumps(object, JSON_INDENT(2));

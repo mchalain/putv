@@ -135,6 +135,12 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 			media_parseid3tag(path + PROTOCOLNAME_LENGTH, object);
 		}
 #endif
+#ifdef USE_OGGMETADDATA
+		if (mime && !strcmp(mime, mime_audioflac))
+		{
+			media_parseoggmetadata(path + PROTOCOLNAME_LENGTH, object);
+		}
+#endif
 		info = json_dumps(object, JSON_INDENT(2));
 		json_decref(object);
 		ret = mdata->cb(mdata->arg, id, path, info, mime);

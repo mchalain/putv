@@ -95,7 +95,12 @@ media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
 
 typedef struct json_t json_t;
+#ifdef USE_ID3TAG
 int media_parseid3tag(const char *path, json_t *object);
+#endif
+#ifdef USE_OGGMETADDATA
+int media_parseoggmetadata(const char *path, json_t *object);
+#endif
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

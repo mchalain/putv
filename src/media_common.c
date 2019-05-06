@@ -35,6 +35,10 @@
 #define N_(string) string
 #endif
 
+#ifdef USE_OGGMETADDATA
+#include <FLAC/metadata.h>
+#endif
+
 #include "media.h"
 #include "decoder.h"
 #include "player.h"
@@ -210,6 +214,64 @@ int media_parseid3tag(const char *path, json_t *object)
 		}
 	}
 	id3_file_close(fd);
+	return 0;
+}
+#endif
+
+#ifdef USE_OGGMETADDATA
+int media_parseoggmetadata(const char *path, json_t *object)
+{
+	struct
+	{
+		char const *id;
+		char const *label;
+		int const length;
+		enum {
+			label_string,
+			label_integer,
+		} type;
+	} const labels[] =
+	{
+		{str_title, str_title, 5, label_string},
+		{str_album, str_album, 5, label_string},
+		{str_artist, str_artist, 6, label_string},
+		{str_year, str_year, 4, label_integer},
+		{str_genre, str_genre, 5, label_string},
+		{str_date, str_year, 4, label_integer},
+		{"TRACKNUMBER", str_track, 11, label_integer},
+	};
+	FLAC__StreamMetadata *vorbiscomment;
+	FLAC__metadata_get_tags(path, &vorbiscomment);
+	FLAC__StreamMetadata_VorbisComment *data;
+	data = &vorbiscomment->data.vorbis_comment;
+	int n;
+	for (n = 0; n < data->num_comments; n++)
+	{
+		FLAC__StreamMetadata_VorbisComment_Entry *comments;
+		comments = &data->comments[n];
+		json_t *value;
+		int i;
+		for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+		{
+			const char *svalue = comments->entry + labels[i].length;
+			if (!strncasecmp(comments->entry, labels[i].id, labels[i].length) &&
+				svalue[0] == '=')
+			{
+				svalue++;
+				switch(labels[i].type)
+				{
+				case label_string:
+					value = json_string(svalue);
+				break;
+				case label_integer:
+					value = json_integer(atoi(svalue));
+				break;
+				}
+				json_object_set(object, labels[i].label, value);
+			}
+		}
+	}
+	FLAC__metadata_object_delete(vorbiscomment);
 	return 0;
 }
 #endif

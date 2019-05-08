@@ -52,6 +52,7 @@ typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
+	const char *root;
 	player_ctx_t *player;
 	int mediaid;
 	int firstmediaid;
@@ -132,13 +133,13 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 #ifdef USE_ID3TAG
 		if (mime && !strcmp(mime, mime_audiomp3))
 		{
-			media_parseid3tag(path + PROTOCOLNAME_LENGTH, object);
+			media_parseid3tag(path, object);
 		}
 #endif
 #ifdef USE_OGGMETADDATA
 		if (mime && !strcmp(mime, mime_audioflac))
 		{
-			media_parseoggmetadata(path + PROTOCOLNAME_LENGTH, object);
+			media_parseoggmetadata(path, object);
 		}
 #endif
 		char coverpath[PATH_MAX];
@@ -151,15 +152,14 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 			else
 				dname++;
 			strcpy(dname, "cover.jpg");
-			dbg("cover %s", coverpath);
-			if (!access(coverpath + PROTOCOLNAME_LENGTH, R_OK))
+			if (!access(coverpath, R_OK))
 			{
 				json_t *value;
 				value = json_string(coverpath);
 				json_object_set(object, "Cover", value);
 			}
 			strcpy(dname, "cover.png");
-			if (!access(coverpath + PROTOCOLNAME_LENGTH, R_OK))
+			if (!access(coverpath, R_OK))
 			{
 				json_t *value;
 				value = json_string(coverpath);
@@ -221,24 +221,11 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 {
 	int ret = -1;
 	media_dirlist_t *it = *pit;
-	const char *root = "";
 	if (it == NULL)
 	{
-		const char *path = utils_getpath(ctx->url, "file://");
-		if (path == NULL)
-		{
-			return -1;
-		}
-		if (path[0] == '~')
-		{
-			root = getenv("HOME");
-			path += 1;
-		}
-		if (path[0] == '/')
-			path += 1;
 		it = calloc(1, sizeof(*it));
-		it->path = malloc(strlen(root) + 1 + strlen(path) + 1);
-		sprintf(it->path,"%s/%s", root, path);
+		it->path = malloc(strlen(ctx->root) + 1);
+		strcpy(it->path, ctx->root);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
 		ctx->first = it;
@@ -307,10 +294,10 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 			break;
 			case DT_REG:
 			{
-				char *path = malloc(PROTOCOLNAME_LENGTH + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
+				char *path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
 				{
-					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
+					sprintf(path, "%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
 					if (strcmp(mime, mime_octetstream) != 0)
@@ -552,6 +539,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->player = player;
 		ctx->url = url;
+		ctx->root = path;
 		ctx->mediaid = -1;
 		ctx->firstmediaid = 0;
 		_find_mediaid_t data = {-1, NULL, NULL};

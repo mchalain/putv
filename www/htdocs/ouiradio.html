@@ -135,12 +135,16 @@ $(document).ready(function()
 					$(elem).text("");
 				}
 			}
+			$('#Cover').attr("src", "");
 			for (info in result.info)
 			{
 				var elem = $("#"+info);
 				if (elem != undefined)
 				{
-					$(elem).text(result.info[info]);
+					if ($(elem).is("img"))
+						$(elem).attr("src", result.info[info]);
+					else
+						$(elem).text(result.info[info]);
 				}
 			}
 		}
@@ -261,9 +265,9 @@ $(document).ready(function()
 		{
 			player.send("next", null);
 		});
-	$('#test').on('click', function (event)
+	$('#stop').on('click', function (event)
 		{
-			player.send('capabilities', null);
+			player.send("stop", null);
 		});
 	$('#PagerList').find('.next')
 		.addClass('disabled')
@@ -415,6 +419,9 @@ $(document).ready(function()
 						<div class="panel-heading"><h3 id='Title'></h3><h4 id='Artist'></h4></div>
 						<div class="panel-body">
 							<div class="container-fluid">
+								<div class="row">
+									<img class="col-xs-9 col-xs-offset-1" id ='Cover'/>
+								</div>
 								<div class="row">
 									<h4 class="col-xs-8" id ='Album'></h4><div class="col-xs-3"> Track <span id='Track'></span></div>
 								</div>

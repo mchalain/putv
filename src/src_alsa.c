@@ -110,6 +110,7 @@ static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int r
 		err("src: format");
 		goto error;
 	}
+
 	dir=0;
 	ret = snd_pcm_hw_params_set_rate_near(ctx->handle, hw_params, &rate, &dir);
 	if (ret < 0)
@@ -117,6 +118,7 @@ static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int r
 		err("src: rate");
 		goto error;
 	}
+
 	ret = snd_pcm_hw_params_set_channels(ctx->handle, hw_params, ctx->nchannels);
 	if (ret < 0)
 	{
@@ -174,15 +176,17 @@ static const char *jitter_name = "alsa";
 static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
-	const char *soundcard;
+	int samplerate = DEFAULT_SAMPLERATE;
+	snd_pcm_format_t format = SND_PCM_FORMAT_S32_LE;
+	int nchannels = 2, samplesize =4;
 	src_ctx_t *ctx = NULL;
+	const char *soundcard;
+	char *setting;
 
-	soundcard = strstr(url, "://");
-	if (soundcard != NULL)
-	{
-		soundcard += 3;
-	}
-	else
+	soundcard = utils_getpath(url, "alsa://", &setting);
+	if (soundcard == NULL)
+		soundcard = utils_getpath(url, "pcm://", &setting);
+	if (soundcard == NULL)
 	{
 		soundcard = url;
 	}
@@ -190,18 +194,52 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	int ret;
 	snd_pcm_t *handle;
 	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, 0);
-
 	if (ret == 0)
 	{
+#ifdef SINK_ALSA_CONFIG
+		while (setting != NULL)
+		{
+			if (!strncmp(setting + 1, "format=", 7))
+			{
+				setting += 8;
+				if (!strncmp(setting, "8", 4))
+				{
+					format = SND_PCM_FORMAT_S8;
+					samplesize = 1;
+				}
+				if (!strncmp(setting, "16le", 4))
+				{
+					format = SND_PCM_FORMAT_S16_LE;
+					samplesize = 2;
+				}
+				if (!strncmp(setting, "24le", 4))
+				{
+					format = SND_PCM_FORMAT_S24_3LE;
+					samplesize = 3;
+				}
+				if (!strncmp(setting, "32le", 4))
+				{
+					format = SND_PCM_FORMAT_S32_LE;
+					samplesize = 4;
+				}
+			}
+			if (!strncmp(setting + 1, "samplerate=", 11))
+			{
+				setting += 12;
+				samplerate = atoi(setting);
+			}
+			setting = strchr(setting, ',');
+		}
+#endif
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->soundcard = soundcard;
 		ctx->player = player;
 		ctx->handle = handle;
-		dbg("src: %s", src_alsa->name);
-		ctx->format = SND_PCM_FORMAT_S24_LE;
-		ctx->samplesize = 4;
-		ctx->nchannels = 2;
-		ctx->samplerate = 48000;
+		dbg("src: %s on %s", src_alsa->name, soundcard);
+		ctx->format = format;
+		ctx->samplesize = samplesize;
+		ctx->nchannels = nchannels;
+		ctx->samplerate = samplerate;
 		ctx->periodsize = LATENCY * 1000 / ctx->samplerate;
 	}
 	return ctx;
@@ -299,7 +337,7 @@ static int _src_prepare(src_ctx_t *ctx, const char *info)
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		err("new es event");
+		err("src: alsa new es event");
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}

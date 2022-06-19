@@ -78,6 +78,8 @@ static int _decoder_check(const char *path)
 {
 	if (!strncmp(path, "pcm://", 6))
 		return 1;
+	if (!strncmp(path, "alsa://", 6))
+		return 1;
 	char *ext = strrchr(path, '.');
 	if (ext && !strcmp(ext, ".wav"))
 		return 1;

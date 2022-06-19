@@ -350,9 +350,12 @@ static int _src_run(src_ctx_t *ctx)
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
+		err("src: alsa start decode event");
 		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
+	if (ctx->out == NULL)
+		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 	pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 	return 0;
 }

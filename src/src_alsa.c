@@ -252,7 +252,7 @@ static void *_src_thread(void *arg)
 
 
 	int divider = ctx->samplesize * ctx->nchannels;
-	unsigned long size = ctx->periodsize * divider;
+	unsigned long nsamples = ctx->periodsize;
 
 	snd_pcm_start(ctx->handle);
 	/* start decoding */
@@ -268,10 +268,10 @@ static void *_src_thread(void *arg)
 			 */
 			if (buff == NULL)
 				break;
+			nsamples = ctx->out->ctx->size / divider;
 		}
-		unsigned char *buff2 = NULL;
 
-		while ((ret = snd_pcm_avail_update (ctx->handle)) < size)
+		while ((ret = snd_pcm_avail_update (ctx->handle)) < nsamples)
 		{
 			if (ret >= 0 && snd_pcm_state(ctx->handle) == SND_PCM_STATE_XRUN)
 				ret=-EPIPE;
@@ -282,8 +282,8 @@ static void *_src_thread(void *arg)
 		}
 		if (ret > 0)
 		{
-			if (ret > size)
-				ret = size;
+			if (ret > nsamples)
+				ret = nsamples;
 #ifdef LBENDIAN
 			unsigned char *buff2 = NULL;
 			buff2 = malloc(ret * divider);
@@ -355,7 +355,13 @@ static int _src_run(src_ctx_t *ctx)
 		listener = listener->next;
 	}
 	if (ctx->out == NULL)
+	{
 		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
+		int divider = ctx->samplesize * ctx->nchannels;
+		ctx->periodsize = (ctx->out->ctx->size / divider) * 5;
+		dbg("src: latency %dms", (ctx->periodsize * 1000) / ctx->samplerate);
+		_pcm_open(ctx, ctx->format, ctx->samplerate, &ctx->periodsize);
+	}
 	pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 	return 0;
 }
@@ -392,7 +398,7 @@ static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
 
 	return 0;
 }

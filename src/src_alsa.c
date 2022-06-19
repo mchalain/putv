@@ -284,11 +284,18 @@ static void *_src_thread(void *arg)
 		{
 			if (ret > size)
 				ret = size;
-			buff2 = malloc(ret * divider);
 #ifdef LBENDIAN
+			unsigned char *buff2 = NULL;
+			buff2 = malloc(ret * divider);
 			ret = snd_pcm_readi(ctx->handle, buff2, ret);
+			int i;
+			for (i = 0; i < ret; i++)
+			{
+				buff[i*2] = buff2[(i*2) + 1];
+				buff[(i*2) + 1] = buff2[i*2];
+			}
+			free(buff2);
 #else
-			src_dbg("buff %lu %u", ctx->out->ctx->size, ret * 4);
 			ret = snd_pcm_readi(ctx->handle, buff, ret);
 #endif
 		}
@@ -304,18 +311,9 @@ static void *_src_thread(void *arg)
 		}
 		else if (ret > 0)
 		{
-#ifdef LBENDIAN
-			int i;
-			for (i = 0; i < ret; i++)
-			{
-				buff[i*2] = buff2[(i*2) + 1];
-				buff[(i*2) + 1] = buff2[i*2];
-			}
-#endif
 			ctx->out->ops->push(ctx->out->ctx, ret * divider, NULL);
 			buff = NULL;
 		}
-		free(buff2);
 	}
 	dbg("src: thread end");
 	ctx->out->ops->flush(ctx->out->ctx);

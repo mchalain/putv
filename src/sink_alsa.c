@@ -35,13 +35,14 @@
 
 #include "player.h"
 #include "jitter.h"
+#include "media.h"
 #include "encoder.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
-	char *soundcard;
+	const char *soundcard;
 	snd_pcm_t *playback_handle;
 	char *mixerch;
 	snd_mixer_t *mixer;
@@ -174,14 +175,6 @@ static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
 {
 	int ret;
-
-	sink_dbg("sink: open %s", ctx->soundcard);
-	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
-	if (ret < 0)
-	{
-		err("sink: open %s", ctx->soundcard);
-		goto error;
-	}
 
 	pcm_config_t config = {0};
 	jitter_format_t downformat = _pcm_config(format, &config);
@@ -324,18 +317,24 @@ static int _pcm_close(sink_ctx_t *ctx)
 }
 
 static const char *jitter_name = "alsa";
-static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
+static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 {
 	int samplerate = DEFAULT_SAMPLERATE;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
-	if (!strncmp(jitter_name, soundcard,4) && soundcard[4] == ':')
-		soundcard += 5;
-	ctx->soundcard = strdup(soundcard);
+	const char *soundcard;
+	char *setting;
+
+	soundcard = utils_getpath(url, "alsa://", &setting);
+	if (soundcard == NULL)
+		soundcard = utils_getpath(url, "pcm://", &setting);
+	if (soundcard == NULL)
+	{
+		soundcard = url;
+	}
 	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
-	char *setting = strchr(ctx->soundcard, '?');
 	while (setting != NULL)
 	{
 		if (!strncmp(setting + 1, "format=", 7))
@@ -367,8 +366,20 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 #endif
 
+	ctx->soundcard = soundcard;
 	ctx->buffersize = LATENCE_MS * samplerate / 1000;
 	ctx->samplerate = samplerate;
+
+	int ret;
+	sink_dbg("sink: open %s", soundcard);
+	ret = snd_pcm_open(&ctx->playback_handle, soundcard, SND_PCM_STREAM_PLAYBACK, 0);
+	if (ret < 0)
+	{
+		err("sink: open %s", soundcard);
+		free(ctx);
+		return NULL;
+	}
+
 	if (_pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
@@ -383,7 +394,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		snd_mixer_selem_id_t *sid;
 
 		snd_mixer_open(&ctx->mixer, 0);
-		snd_mixer_attach(ctx->mixer, ctx->soundcard);
+		snd_mixer_attach(ctx->mixer, soundcard);
 		snd_mixer_selem_register(ctx->mixer, NULL, NULL);
 		snd_mixer_load(ctx->mixer);
 
@@ -400,7 +411,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 #endif
 
-	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
+	dbg("sink: alsa card %s mixer %s", soundcard, ctx->mixerch);
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, ctx->buffersize);
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
@@ -627,7 +638,6 @@ static void alsa_destroy(sink_ctx_t *ctx)
 
 	free(ctx->noise);
 	jitter_destroy(ctx->in);
-	free(ctx->soundcard);
 	free(ctx);
 }
 

@@ -57,6 +57,7 @@ endif
 
 ifeq ($(BR2_PACKAGE_PUTV_WEBAPP),y)
 define PUTV_WEBAPP_INSTALL_TARGET_CMDS
+	ln -sf /media $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/media
 endef
 else
 PUTV_WEBAPP_INSTALL_TARGET_CMDS=
@@ -77,6 +78,7 @@ define PUTV_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/ouiradio.json \
 		$(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
+
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/putv.in $(@D)/putv.conf
 	if [ -n "$(PUTV)" ]; then sed -i "s/%DAEMON%/$(PUTV)/g" $(@D)/putv.conf; fi
 	if [ -z "$(PUTV)" ]; then sed -i "s/DAEMON=.*//" $(@D)/putv.conf; fi

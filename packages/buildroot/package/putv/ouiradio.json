@@ -1,14 +1,8 @@
 {
-"player": "ouiradio",
+"players": [{"name":"speaker","url":"/putv","sink":"alsa"}],
 "media":[
-	{"name":"radio","media":"db:///home/radio.db","options":[]},
-	{"name":"rock","media":"db://rock.db?rock","options":[],"base":"/home/share/Musics/"},
-	{"name":"inde","media":"db://inde.db?inde","options":[],"base":"/home/share/Musics/"},
-	{"name":"cool","media":"db://cool.db?cool","options":[],"base":"/home/share/Musics/"},
-	{"name":"full","media":"file:///home/share/Musics/","options":[]},
-	{"name":"usb","media":"file:///media/","options":[]}
-],
-"media_disable":[
-	{"name":"interne","media":"db:///home/share/Musics/music.db","options":[]}
+	{"name":"interne","media":"file://media/","options":[]},
+	{"name":"radio","media":"db://apps/radio.db?readwrite","options":[]},
+	{"name":"PC","media":"alsa://hw:1,0","options":[]}
 ]
 }

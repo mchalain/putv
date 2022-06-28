@@ -14,8 +14,8 @@ config BR2_PACKAGE_PUTV
 	help
 	  https://github.com/ouistiti-project
 
-config BR2_PACKAGE_PUTV_WEBIF_HTTPS
-	bool "install web interface on HTTPS"
+config BR2_PACKAGE_PUTV_WEBAPP
+	bool "install web interface"
 	depends on BR2_PACKAGE_PUTV
 
 config BR2_PACKAGE_PUTV_UPNPRENDERER

@@ -1,8 +1,16 @@
 # putv config.
+DAEMON=%DAEMON%
+PUTV_WEB=%PUTV_WEB%
 
-case $1 in
+CINPUT_DEVICE="/dev/input/event0"
+CINPUT_JSON="${PUTV_WEB}/htdocs/apps/ouiradio.json"
+WEBSOCKETDIR=${PUTV_WEB}/websocket
+FILTER=pcm?mono=mixed
+MIXER=%MIXER%
+
+case $DAEMON in
   totem)
-    OUTPUT="alsa:default?format=24le,mixer=Master"
+    OUTPUT="alsa://default?format=24le,mixer=${MIXER}"
     ;;
   putv)
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
@@ -12,5 +20,3 @@ case $1 in
     ;;
 esac
 
-CINPUT_DEVICE="/dev/input/event0"
-CINPUT_JSON="/home/ouiradio.json"

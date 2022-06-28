@@ -36,6 +36,10 @@ stop() {
 case "$1" in
 	start|stop)
 		"$1";;
+	restart)
+		stop
+		start
+		;;
 	reload)
 		# Restart, since there is no true "reload" feature.
 		restart;;

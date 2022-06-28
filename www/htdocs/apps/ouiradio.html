@@ -105,7 +105,9 @@ class PlayerInfo extends PlayerCmd
 			// fill "#info"
 			this.#setinfo($('#info'), info);
 		}
-		if ($('#infobox').css('display') == "visible" && $('#infobox').data('id') == id) {
+		console.log("infobox", $('#infobox').data('id'));
+		if ($('#infobox').data('id') == id) {
+			$('#infobox').modal('show');
 			// clean "#infobox"
 			this.#setinfo($('#infobox'), {});
 			// clean "#editorbox"
@@ -223,7 +225,6 @@ class PlayerInfo extends PlayerCmd
 						{
 							var id = $(event.currentTarget).parents('.playlist-item').data('id');
 							$('#infobox').data('id', id);
-							$('#infobox').modal('show');
 							this.about(id);
 						}.bind(this));
 					$playlist.append($elem);

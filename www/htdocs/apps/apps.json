@@ -1,1 +1,19 @@
-[{"type":"dropdown","name": "media", "href":"/apps/ouiradio.html"}]
+{
+	"title":"Totem",
+	"apps":[{
+		"name":"radio",
+		"default":true,
+		"src":"/apps/ouiradio.html",
+		"secure": false
+	},{
+		"name":"database",
+		"src":"/apps/musics.html",
+		"secure": false
+	}],
+	"cmdbar":[],
+	"scripts":[],
+	"authentication": {
+		"signin": "/apps/signin.html",
+		"signup": "/apps/signup.html"
+	}
+}

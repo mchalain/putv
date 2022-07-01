@@ -58,7 +58,7 @@
 #define dbg(...)
 #endif
 
-typedef void *(*__start_routine_t) (void *);
+#define MAX_INPUTS 3
 
 typedef struct input_ctx_s input_ctx_t;
 struct input_ctx_s
@@ -70,7 +70,7 @@ struct input_ctx_s
 	const char *input_path;
 	json_t *media;
 	int media_id;
-	int inputfd;
+	int inputfd[MAX_INPUTS];
 	char *socketpath;
 	client_data_t *client;
 	char run;
@@ -102,7 +102,7 @@ const static struct libinput_interface interface = {
 };
 #endif
 
-int input_checkstate(void *data, json_t *params)
+static int input_checkstate(void *data, json_t *params)
 {
 	input_ctx_t *ctx = (input_ctx_t *)data;
 	const char *state;
@@ -214,65 +214,84 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	default:
 		dbg("key %d", event->code);
 	}
+	dbg("%s ret %d", __FUNCTION__, ret);
 	return ret;
 }
 
-int run_client(void *arg)
+static int input_closing(void *data, json_t *params)
 {
-	input_ctx_t *ctx = (input_ctx_t *)arg;
-
-	client_data_t data = {0};
-	client_unix(ctx->socketpath, &data);
-	client_async(&data, 1);
-	client_eventlistener(&data, "onchange", input_checkstate, ctx);
-	ctx->client = &data;
-
-	dbg("start of client");
-	pthread_t thread;
-	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
+	input_ctx_t *ctx = (input_ctx_t *)data;
+	ctx->run = 0;
+	return 0;
+}
 
 #ifdef USE_LIBINPUT
+static int run_libinput(input_ctx_t *ctx)
+{
 	struct libinput *li;
 	struct libinput_event *ievent;
 	struct udev *udev = udev_new();
-
 	li = libinput_udev_create_context(&interface, NULL, udev);
 	libinput_udev_assign_seat(li, "seat0");
 	libinput_dispatch(li);
 	while ((ievent = libinput_get_event(li)) != NULL) {
 		// handle the event here
-		if (libinput_event_get_type(ievent) == LIBINPUT_EVENT_KEYBOARD_KEY)
+		switch (libinput_event_get_type(ievent))
 		{
-			struct libinput_event_keyboard *event_kb = libinput_event_get_keyboard_event(ievent);
-			if (event_kb)
+			case LIBINPUT_EVENT_KEYBOARD_KEY:
 			{
-				struct input_event event;
-				event.type = EV_KEY;
-				event.code = libinput_event_keyboard_get_key(event_kb);
-				event.value = libinput_event_keyboard_get_key_state(event_kb);
+				struct libinput_event_keyboard *event_kb = libinput_event_get_keyboard_event(ievent);
+				if (event_kb)
+				{
+					struct input_event event;
+					event.type = EV_KEY;
+					event.code = libinput_event_keyboard_get_key(event_kb);
+					event.value = libinput_event_keyboard_get_key_state(event_kb);
 
-				ret = input_parseevent(ctx, &event);
-				if (ret == -1)
-					break;
+					input_parseevent(ctx, &event);
+				}
 			}
+			break;
+			case LIBINPUT_EVENT_POINTER_AXIS:
+			{
+				struct libinput_event_pointer *event_pt = libinput_event_get_pointer_event(ievent);
+				if (libinput_event_pointer_has_axis(event_pt, LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL))
+				{
+					int value = libinput_event_pointer_get_axis_value(event_pt, LIBINPUT_POINTER_AXIS_SCROLL_VERTICAL);
+				}
+			}
+			break;
 		}
 		libinput_event_destroy(ievent);
 		libinput_dispatch(li);
 	}
 	libinput_unref(li);
-#else
-	ctx->inputfd = open(ctx->input_path, O_RDONLY);
-	while ((ctx->inputfd > 0 && ctx->run))
+	return0
+}
+#endif
+
+static int run(input_ctx_t *ctx)
+{
+	while (ctx->run)
 	{
 		struct input_event event;
+		int maxfd = 0;
 		fd_set rfds;
+		struct timeval timeout = {2,0};
+
 		FD_ZERO(&rfds);
-		FD_SET(ctx->inputfd, &rfds);
-		int maxfd = ctx->inputfd;
-		int ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		if (ret > 0 && FD_ISSET(ctx->inputfd, &rfds))
+		for (int i = 0; i < MAX_INPUTS && ctx->inputfd[i]; i++)
 		{
-			ret = read(ctx->inputfd, &event, sizeof(event));
+			FD_SET(ctx->inputfd[i], &rfds);
+			maxfd = (maxfd < ctx->inputfd[i])?ctx->inputfd[i]:maxfd;
+		}
+		int ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
+		for (int i = 0; i < MAX_INPUTS && ctx->inputfd[i] > 0; i++)
+		{
+			if (FD_ISSET(ctx->inputfd[i], &rfds))
+			{
+				ret = read(ctx->inputfd[i], &event, sizeof(event));
+			}
 		}
 		if (ret > 0)
 		{
@@ -281,13 +300,33 @@ int run_client(void *arg)
 				ret = 0;
 		}
 		if (ret < 0)
+		{
+			err("input: client error %s", strerror(errno));
 			break;
+		}
 	}
-	close(ctx->inputfd);
-#endif
-	dbg("end of client");
+	for (int i = 0; i < MAX_INPUTS && ctx->inputfd[i]; i++)
+	{
+		close(ctx->inputfd[i]);
+	}
+	return 0;
+}
+
+static int run_client(void *arg)
+{
+	input_ctx_t *ctx = (input_ctx_t *)arg;
+
+	client_data_t data = {0};
+	client_unix(ctx->socketpath, &data);
+	client_async(&data, 1);
+	client_eventlistener(&data, "onchange", input_checkstate, ctx);
+	client_eventlistener(&data, "onclose", input_closing, ctx);
+	ctx->client = &data;
+
+	client_run(&data);
+	run(ctx);
+
 	client_disconnect(&data);
-	pthread_join(thread, NULL);
 	return 0;
 }
 
@@ -352,9 +391,10 @@ int main(int argc, char **argv)
 	input_ctx_t input_data = {
 		.root = "/tmp",
 		.name = basename(argv[0]),
-		.input_path = "/dev/input/event0",
+		.inputfd = {0},
 	};
 	const char *media_path;
+	int nbinputs = 0;
 
 	int opt;
 	do
@@ -369,7 +409,7 @@ int main(int argc, char **argv)
 				input_data.name = optarg;
 			break;
 			case 'i':
-				input_data.input_path = optarg;
+				input_data.inputfd[nbinputs++] = open(optarg, O_RDONLY);
 			break;
 			case 'm':
 				media_path = optarg;
@@ -409,6 +449,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (nbinputs == 0)
+		input_data.inputfd[nbinputs++] = open("/dev/input/event0", O_RDONLY);
 	json_error_t error;
 	json_t *media;
 	media = json_load_file(media_path, 0, &error);

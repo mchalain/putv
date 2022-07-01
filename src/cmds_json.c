@@ -54,6 +54,9 @@ enum eventsmask_e
 	ONCHANGE = 0x01,
 };
 
+#define ONCHANGE_MEDIA 0x01
+#define ONCHANGE_SOURCE 0x02
+#define ONCHANGE_VOLUME 0x04
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -69,6 +72,7 @@ struct cmds_ctx_s
 	unsigned int eventsmask;
 	int run;
 	int onchangeid;
+	int onchangemask;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -837,10 +841,11 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	json_object_set(*result, "options", options);
 
-	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL && (ctx->onchangemask &ONCHANGE_VOLUME))
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
+		ctx->onchangemask |= ~ONCHANGE_VOLUME;
 	}
 	return 0;
 }
@@ -921,6 +926,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 		return -1;
 	}
 	json_t *value = NULL;
+	unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "level");
@@ -937,8 +943,8 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 			if (volume < 0)
 				volume = 0;
 			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+			ctx->onchangemask &= ONCHANGE_VOLUME;
 		}
-		int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		value = json_object_get(json_params, "step");
 		if (value && json_is_integer(value))
 		{
@@ -953,10 +959,11 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 			if (volume < 0)
 				volume = 0;
 			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+			ctx->onchangemask &= ONCHANGE_VOLUME;
 		}
-		*result = json_object();
-		json_object_set(*result, "level", json_integer(volume));
 	}
+	*result = json_object();
+	json_object_set(*result, "level", json_integer(volume));
 	return 0;
 }
 
@@ -1429,7 +1436,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 		}
 		while (ctx->requests != NULL)
 		{
-			cmds_dbg("cmds: send request");
+			cmds_dbg("cmds: send response");
 			json_request_list_t *request = ctx->requests;
 			ctx->requests = ctx->requests->next;
 			int ret = -1;
@@ -1442,7 +1449,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 			}
 			if (ret < 0)
 			{
-				err("cmds: sendresponse error %d", ret);
+				err("cmds: send response error %d", ret);
 				/**
 				 * remove all requests on this client threads
 				 */
@@ -1486,7 +1493,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 					if (ret < 0)
 					{
 						pthread_mutex_lock(&ctx->mutex);
-						err("cmds: sendevent error %d", ret);
+						err("cmds: send event error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
 						pthread_mutex_unlock(&ctx->mutex);
 					}
@@ -1559,7 +1566,7 @@ static int jsonrpc_command(thread_info_t *info)
 		request = json_load_callback(_cmds_recv, info, flags, &error);
 		if (request != NULL)
 		{
-			cmds_dbg("cmds: new request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
+			cmds_dbg("cmds: receive request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 			json_request_list_t *entry = calloc(1, sizeof(*entry));
 			entry->info = info;
 			entry->request = request;
@@ -1577,7 +1584,7 @@ static int jsonrpc_command(thread_info_t *info)
 		}
 		else
 		{
-			cmds_dbg("cmds: recv nothing");
+			err("cmds: json error %s", error.text);
 			if (info->sock == -1)
 				run = 0;
 		}
@@ -1598,6 +1605,7 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_mutex_init(&ctx->mutex, NULL);
 	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
+	ctx->onchangemask = -1;
 	return ctx;
 }
 

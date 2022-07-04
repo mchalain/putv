@@ -57,10 +57,23 @@ endif
 
 ifeq ($(BR2_PACKAGE_PUTV_WEBAPP),y)
 define PUTV_WEBAPP_INSTALL_TARGET_CMDS
-	ln -sf /media $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/media
+	ln -sf /media $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/
 endef
 else
 PUTV_WEBAPP_INSTALL_TARGET_CMDS=
+endif
+
+ifeq ($(BR2_PACKAGE_MEDIAKEYS_ROTARY),y)
+define PUTV_ROTARY_VOLUME_INSTALL_TARGET_CMDS
+	echo "OPTIONS_CINPUT=\"-i /dev/input/event1\"" >> $(@D)/putv.conf
+endef
+endif
+
+ifeq ($(BR2_PACKAGE_GPIOD)$(BR2_PACKAGE_PUTV_GPIOD),yy)
+define PUTV_GPIOD_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/gpiod.conf \
+		$(TARGET_DIR)/etc/gpiod/rules.d/putv.conf
+endef
 endif
 
 PUTV_MIXER?=Master
@@ -84,6 +97,7 @@ define PUTV_INSTALL_TARGET_CMDS
 	if [ -z "$(PUTV)" ]; then sed -i "s/DAEMON=.*//" $(@D)/putv.conf; fi
 	sed -i "s,%PUTV_WEB%,$(PUTV_DATADIR),g" $(@D)/putv.conf
 	sed -i "s,%MIXER%,$(PUTV_MIXER),g" $(@D)/putv.conf
+	$(call PUTV_ROTARY_VOLUME_INSTALL_TARGET_CMDS)
 	$(INSTALL) -D -m 644 $(@D)/putv.conf \
 		$(TARGET_DIR)/etc/default/putv
 	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
@@ -95,15 +109,8 @@ define PUTV_INSTALL_TARGET_CMDS
 			$(TARGET_DIR)/etc/init.d/gmrender.sh; \
 	fi
 	$(call PUTV_WEBAPP_INSTALL_TARGET_CMDS)
+	$(call PUTV_GPIOD_INSTALL_TARGET_CMDS)
 endef
-
-define PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
-	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/gpiod.conf \
-		$(TARGET_DIR)/etc/gpiod/rules.d/putv.conf
-endef
-ifeq ($(BR2_PACKAGE_GPIOD),y)
-PUTV_POST_INSTALL_TARGET_HOOKS+=PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
-endif
 
 define PUTV_INSTALL_INIT_SYSV
 	ln -sf putv.sh $(TARGET_DIR)/etc/init.d/S30putv

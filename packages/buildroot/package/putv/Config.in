@@ -18,6 +18,10 @@ config BR2_PACKAGE_PUTV_WEBAPP
 	bool "install web interface"
 	depends on BR2_PACKAGE_PUTV
 
+config BR2_PACKAGE_PUTV_GPIOD
+	bool "install gpiod trigger"
+	depends on BR2_PACKAGE_PUTV
+
 config BR2_PACKAGE_PUTV_UPNPRENDERER
 	bool "Enable Upnp renderer"
 	select BR2_PACKAGE_GMRENDER_RESURRECT2

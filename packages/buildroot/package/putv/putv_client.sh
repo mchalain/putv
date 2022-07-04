@@ -14,7 +14,7 @@ OPTIONS=""
 [ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
 
 OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON}"
-OPTIONS_CINPUT="-i ${CINPUT_DEVICE} -m ${CINPUT_JSON}"
+OPTIONS_CINPUT="${OPTIONS_CINPUT} -i ${CINPUT_DEVICE} -m ${CINPUT_JSON}"
 
 start() {
   chmod a+rwx ${WEBSOCKETDIR}

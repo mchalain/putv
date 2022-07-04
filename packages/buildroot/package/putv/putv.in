@@ -9,10 +9,10 @@ FILTER=pcm?mono=mixed
 MIXER=%MIXER%
 
 case $DAEMON in
-  totem)
+  putv)
     OUTPUT="alsa://default?format=24le,mixer=${MIXER}"
     ;;
-  putv)
+  totem)
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
     ;;
   ouiradio)

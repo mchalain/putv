@@ -250,6 +250,15 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 					if (new->path)
 					{
 						sprintf(new->path,"%s/%s", it->path, it->items[it->index]->d_name);
+						int fd = open(new->path, O_DIRECTORY);
+						if (fd < 0 || !faccessat(fd, ".putv_unparse", F_OK, 0))
+						{
+							free(new->path);
+							free(new);
+							close(fd);
+							break;
+						}
+						close(fd);
 						new->nitems = scandir(new->path, &new->items, NULL, alphasort);
 					}
 					if (new->nitems > 0)

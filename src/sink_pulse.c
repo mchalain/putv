@@ -239,6 +239,7 @@ static void *sink_thread(void *arg)
 		if (ret < 0)
 		{
 			warn("sink: write error %s", pa_strerror(error));
+			ctx->state = STATE_ERROR;
 		}
 		dbg("sink: write");
 		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
@@ -254,7 +255,7 @@ static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 
 static const encoder_t *sink_encoder(sink_ctx_t *ctx)
 {
-	return encoder_passthrought;
+	return encoder_passthrough;
 }
 
 static int sink_run(sink_ctx_t *ctx)

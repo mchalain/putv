@@ -59,7 +59,6 @@ struct player_ctx_s
 	const char *filtername;
 
 	media_t *media;
-	media_t *nextmedia;
 	state_t state;
 	event_listener_t *listeners;
 
@@ -92,14 +91,20 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	if (media)
 	{
 		dbg("player: change media %s", media->ops->name);
-		ctx->nextmedia = media;
-		if (now || ctx->media == NULL)
+		if (media == NULL)
 		{
-			player_state(ctx, STATE_STOP);
+			return -1;
 		}
 
-		if (ctx->media == NULL)
-			ctx->media = media;
+		pthread_mutex_lock(&ctx->mutex);
+		if (ctx->media)
+		{
+			ctx->media->ops->destroy(ctx->media->ctx);
+			free(ctx->media);
+		}
+		ctx->media = media;
+		pthread_mutex_unlock(&ctx->mutex);
+
 		if (media->ops->loop && loop)
 		{
 			media->ops->loop(media->ctx, OPTION_ENABLE);
@@ -107,6 +112,16 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		if (media->ops->random && random)
 		{
 			media->ops->random(media->ctx, OPTION_ENABLE);
+		}
+		// try to start id = 0 or id = 1
+		/// db media store src id from 1 and not 0
+		int ret = player_play(ctx, 0);
+		if (ret < 0)
+			ret = player_play(ctx, 1);
+		if (now && ret >= 0)
+		{
+			dbg("player: start new media");
+			int id = player_next(ctx, 1);
 		}
 	}
 	return 0;
@@ -331,7 +346,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 int player_play(player_ctx_t *ctx, int id)
 {
 	int ret = -1;
-	if (ctx->media->ops->find != NULL)
+	if (ctx->media && ctx->media->ops->find != NULL)
 	{
 		ret = ctx->media->ops->find(ctx->media->ctx, id, _player_play, ctx);
 		ret -= 1;
@@ -368,11 +383,13 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 				src_destroy(ctx->nextsrc);
 				ctx->nextsrc = NULL;
 			}
-
-			if (ctx->media->ops->end)
-				ctx->media->ops->end(ctx->media->ctx);
-			else
-				ctx->media->ops->find(ctx->media->ctx, -1, NULL, NULL);
+			if (ctx->media != NULL)
+			{
+				if (ctx->media->ops->end)
+					ctx->media->ops->end(ctx->media->ctx);
+				else
+					ctx->media->ops->find(ctx->media->ctx, -1, NULL, NULL);
+			}
 			for (i = 0; i < ctx->noutstreams; i++)
 				ctx->outstream[i]->ops->reset(ctx->outstream[i]->ctx);
 			dbg("player: stop");
@@ -439,23 +456,6 @@ int player_run(player_ctx_t *ctx)
 	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{
-		if (ctx->media != ctx->nextmedia)
-		{
-			pthread_mutex_lock(&ctx->mutex);
-			if (ctx->media)
-			{
-				ctx->media->ops->destroy(ctx->media->ctx);
-				free(ctx->media);
-			}
-			ctx->media = ctx->nextmedia;
-			pthread_mutex_unlock(&ctx->mutex);
-		}
-
-		if (ctx->media == NULL)
-		{
-			err("media not available");
-			player_state(ctx, STATE_STOP);
-		}
 		pthread_mutex_lock(&ctx->mutex);
 		while (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 		{
@@ -468,6 +468,12 @@ int player_run(player_ctx_t *ctx)
 
 		last_state = ctx->state & ~STATE_PAUSE_MASK;
 		pthread_mutex_unlock(&ctx->mutex);
+
+		if (ctx->media == NULL)
+		{
+			err("media not available");
+			player_state(ctx, STATE_STOP);
+		}
 
 		int new_state;
 		new_state = _player_stateengine(ctx, ctx->state & ~STATE_PAUSE_MASK, ctx->state & STATE_PAUSE_MASK);

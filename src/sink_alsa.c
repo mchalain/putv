@@ -337,11 +337,10 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 #ifdef SINK_ALSA_CONFIG
 	while (setting != NULL)
 	{
-		if (!strncmp(setting + 1, "format=", 7))
+		if (!strncmp(setting, "format=", 7))
 		{
-			*setting = '\0';
-			setting += 8;
-			if (!strncmp(setting, "8", 4))
+			setting += 7;
+			if (!strncmp(setting, "8", 1))
 				format = PCM_8bits_mono;
 			if (!strncmp(setting, "16le", 4))
 				format = PCM_16bits_LE_stereo;
@@ -350,19 +349,22 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 			if (!strncmp(setting, "32le", 4))
 				format = PCM_32bits_LE_stereo;
 		}
-		if (!strncmp(setting + 1, "samplerate=", 11))
+		if (!strncmp(setting, "samplerate=", 11))
 		{
-			*setting = '\0';
-			setting += 12;
+			setting += 11;
 			samplerate = atoi(setting);
 		}
-		if (!strncmp(setting + 1, "mixer=", 6))
+		if (!strncmp(setting, "mixer=", 6))
 		{
-			*setting = '\0';
-			setting += 7;
+			setting += 6;
 			ctx->mixerch = setting;
 		}
 		setting = strchr(setting, ',');
+		if (setting)
+		{
+			*setting = '\0';
+			setting++;
+		}
 	}
 #endif
 

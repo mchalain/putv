@@ -784,6 +784,11 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "id");
 		if (*result == NULL && json_is_integer(value))
 		{
+			_display_ctx_t display = {
+				.ctx = ctx,
+				.result = json_object(),
+			};
+			media_t *media = player_media(ctx->player);
 			int id = json_integer_value(value);
 			if (media->ops->find(media->ctx, id, _display, &display) == 1)
 			{
@@ -801,45 +806,54 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	_display_ctx_t display = {
-		.ctx = ctx,
-		.result = json_object(),
-	};
 
-	int id = player_mediaid(ctx->player);
-	ret = media->ops->find(media->ctx, id, _display, &display);
-	if (ret == 1)
+	dbg("cmds: media %p", media);
+	*result = json_object();
+	if (media != NULL)
 	{
-		*result = display.result;
-	}
-	else
-	{
-		json_decref(display.result);
-	}
-	if (*result == NULL)
-	{
-		*result = json_pack("{s:s}", "state", str_stop);
+		_display_ctx_t display = {
+			.ctx = ctx,
+			.result = *result,
+		};
+		int id = player_mediaid(ctx->player);
+		ret = media->ops->find(media->ctx, id, _display, &display);
+		int next = player_next(ctx->player, 0);
+		json_object_set(*result, "next", json_integer(next));
+
+		int count = media->ops->count(media->ctx);
+		json_object_set(*result, "count", json_integer(count));
+
+		const char *mediapath = media_path();
+		json_object_set(*result, "media", json_string(mediapath));
+
+		json_t *options = json_array();
+		if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+		{
+			json_array_append(options, json_string("loop"));
+		}
+		if (media->ops->random && media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+		{
+			json_array_append(options, json_string("random"));
+		}
+		json_object_set(*result, "options", options);
 	}
 
-	int next = player_next(ctx->player, 0);
-	json_object_set(*result, "next", json_integer(next));
+	json_t *json_state;
+	state_t state = player_state(ctx->player, STATE_UNKNOWN);
 
-	int count = media->ops->count(media->ctx);
-	json_object_set(*result, "count", json_integer(count));
-
-	const char *mediapath = media_path();
-	json_object_set(*result, "media", json_string(mediapath));
-
-	json_t *options = json_array();
-	if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	switch (state)
 	{
-		json_array_append(options, json_string("loop"));
+	case STATE_CHANGE:
+	case STATE_PLAY:
+		json_state = json_string(str_play);
+	break;
+	case STATE_PAUSE:
+		json_state = json_string(str_pause);
+	break;
+	default:
+		json_state = json_string(str_stop);
 	}
-	if (media->ops->random && media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
-	{
-		json_array_append(options, json_string("random"));
-	}
-	json_object_set(*result, "options", options);
+	json_object_set(*result, "state", json_state);
 
 	if (ctx->sink && ctx->sink->ops->getvolume != NULL && (ctx->onchangemask &ONCHANGE_VOLUME))
 	{

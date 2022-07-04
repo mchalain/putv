@@ -133,11 +133,14 @@ char *utils_getpath(const char *url, const char *proto, char **query)
 	if (!strncmp(path,"://", 3))
 		path+=3;
 	int length = strlen(path);
-	*query = strchr(path, '?');
-	if (*query != NULL)
+	if (query != NULL)
 	{
-		length -= strlen(*query);
-		*query += 1;
+		*query = strchr(path, '?');
+		if (*query != NULL)
+		{
+			length -= strlen(*query);
+			*query += 1;
+		}
 	}
 	if (path[0] == '~')
 	{

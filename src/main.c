@@ -278,7 +278,6 @@ int main(int argc, char **argv)
 	player_ctx_t *player = player_init(filtername);
 	if (player == NULL)
 		return -1;
-	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
 
 	uid_t pw_uid = getuid();
 	gid_t pw_gid = getgid();
@@ -405,6 +404,7 @@ int main(int argc, char **argv)
 		 * the sink must to run before to start the encoder
 		 */
 		sink->ops->run(sink->ctx);
+		player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 0);
 
 		if (mode & AUTOSTART)
 		{

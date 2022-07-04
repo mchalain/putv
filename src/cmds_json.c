@@ -705,22 +705,6 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 	else if (json_is_array(result))
 		object = json_object();
 
-	json_t *json_state;
-	state_t state = player_state(ctx->player, STATE_UNKNOWN);
-
-	switch (state)
-	{
-	case STATE_CHANGE:
-	case STATE_PLAY:
-		json_state = json_string(str_play);
-	break;
-	case STATE_PAUSE:
-		json_state = json_string(str_pause);
-	break;
-	default:
-		json_state = json_string(str_stop);
-	}
-	json_object_set(object, "state", json_state);
 	_print_entry(object, id, url, info, mime);
 	json_t *index = json_integer(id);
 	json_object_set(object, "id", index);
@@ -734,17 +718,14 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	_display_ctx_t display = {
-		.ctx = ctx,
-		.result = json_object(),
-	};
 	json_t *value;
 	int ret = -1;
 	cmds_dbg("cmds: change");
+	dbg("cmds: change %s", json_dumps(json_params,JSONRPC_DEBUG_FORMAT));
 
 	if (json_is_object(json_params))
 	{
-		int now = 1;
+		int now = 0;
 		int loop = 0;
 		int random = 0;
 		value = json_object_get(json_params, "options");
@@ -758,22 +739,18 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 					loop = 1;
 				if (json_is_string(option) && !strcmp(json_string_value(option), "random"))
 					random = 1;
+				if (json_is_string(option) && !strcmp(json_string_value(option), "autostart"))
+					now = 1;
 			}
-		}
-		value = json_object_get(json_params, "next");
-		if (json_is_boolean(value))
-		{
-			now = ! json_boolean_value(value);
 		}
 		value = json_object_get(json_params, "media");
 		if (json_is_string(value))
 		{
 			const char *str = json_string_value(value);
-			media_t *media = player_media(ctx->player);
+			dbg("cmds: try change %s", str);
 			ret = player_change(ctx->player, str, random, loop, now);
 			if (ret >= 0)
 			{
-				player_state(ctx->player, STATE_STOP);
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}
 			else

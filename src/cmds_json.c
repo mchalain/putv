@@ -1290,29 +1290,31 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 }
 #endif
 
-static size_t _cmds_recv(void *buff, size_t size, void *userctx)
+static ssize_t _cmds_recv(void *buff, size_t size, void *userctx)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
 
-	size = recv(sock,
+	ssize_t ret = recv(sock,
 		buff, size, MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
-	if ((ssize_t)size <= 0)
+	dbg("cmds: receive message %d", ret);
+	if (ret <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
 		close(sock);
 		info->sock = -1;
-		return size;
+		return ret;
 	}
 
-	size_t length = strlen(buff) + 1;
-	if (length < size)
+	ssize_t length = strlen(((char *)buff)) + 1;
+	if (length < ret)
 	{
 		size = length;
 	}
 	size = recv(sock,
 		buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+	((char *)buff)[size] = '\0';
 
 	cmds_dbg("cmds: recv data %.*s", (int)size, (char *)buff);
 	return size;

@@ -26,7 +26,6 @@ class JsonRPC{
 			this.urlsocket += "/"+url;
 		}
 		this.id = 0;
-		this.timer = 0;
 		this.wsready = false;
 		this.cnt = 0;
 		this.string = "";
@@ -35,25 +34,25 @@ class JsonRPC{
 
 	connect()
 	{
-		if (this.timer)
-			clearTimeout(this.timer);
 		this.websocket=new WebSocket(this.urlsocket);
 
 		this.websocket.onopen = function(evt) {
 			this.wsready = true;
+			console.log("socket open: ", evt);
 			if (typeof(this.onopen) == "function")
 				this.onopen.call(this);
 		}.bind(this);
 		this.websocket.onmessage = this.receive.bind(this);
 		this.websocket.onerror = function(evt)
 		{
+			console.log("socket error: ", evt);
 			this.string = "";
 			this.cnt = 0;
 		}.bind(this);
 		this.websocket.onclose = function(evt)
 		{
-			console.log("socket close: "+evt.toString());
-			this.reconnect.bind(this);
+			this.wsready = false;
+			console.log("socket close: ", evt);
 			if (typeof(this.onclose) == "function")
 				this.onclose.call(this);
 		}.bind(this);
@@ -113,27 +112,18 @@ class JsonRPC{
 	receive(evt)
 	{
 		//console.log("receive : "+evt.data);
+		let doubleresponse = evt.data.search("}{");
+		if (doubleresponse != -1)
+		{
+			let first = evt.data.substr(0, doubleresponse + 1);
+			this.runRPC(first);
+			evt.data = evt.data.substr(doubleresponse + 1);
+		}
 		this.runRPC(evt.data);
-	}
-
-	reconnect()
-	{
-		if (typeof(this.onclose) == "function")
-			this.onclose.call(this);
-		this.wsready = false;
-		this.timer = setTimeout(this.connect.bind(this), 3000);
 	}
 
 	close()
 	{
-		this.wsready = false;
-		if (this.timer)
-			clearTimeout(this.timer);
-		this.websocket.onclose = function ()
-		{
-			if (typeof(this.onclose) == "function")
-				this.onclose.call(this);
-		}.bind(this);
 		this.websocket.close();
 	}
 
@@ -153,7 +143,7 @@ class JsonRPC{
 				request.params = JSON.parse(params);
 			}
 			catch(error) {
-				console.log("params: "+params);
+				console.log("jsonrpc params: "+params);
 				console.log(error);
 				return;
 			}

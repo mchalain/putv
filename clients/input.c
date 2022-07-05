@@ -58,6 +58,8 @@
 #define dbg(...)
 #endif
 
+typedef void *(*__start_routine_t) (void *);
+
 #define MAX_INPUTS 3
 
 typedef struct input_ctx_s input_ctx_t;
@@ -310,7 +312,7 @@ static int run(input_ctx_t *ctx)
 				ret = read(ctx->inputfd[i], &event, sizeof(event));
 			}
 		}
-		if (ret > 0)
+		if (ret > 0 && ctx->client != NULL)
 		{
 			ret = input_parseevent_key(ctx, &event);
 			if (ret == -2)
@@ -339,14 +341,13 @@ static int run_client(void *arg)
 	client_unix(ctx->socketpath, &data);
 	client_async(&data, 1);
 	client_eventlistener(&data, "onchange", input_checkstate, ctx);
-	client_eventlistener(&data, "onclose", input_closing, ctx);
 	ctx->client = &data;
 
-	client_run(&data);
-	run(ctx);
+	int ret = client_loop(&data);
+	ctx->client = NULL;
 
 	client_disconnect(&data);
-	return 0;
+	return ret;
 }
 
 #ifdef USE_INOTIFY
@@ -356,22 +357,26 @@ static int run_client(void *arg)
 static void *_check_socket(void *arg)
 {
 	input_ctx_t *ctx = (input_ctx_t *)arg;
-	ctx->socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-	sprintf(ctx->socketpath, "%s/%s", ctx->root, ctx->name);
-	while (ctx->run)
+
+	int inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
+
+	while (1)
 	{
 		if (!access(ctx->socketpath, R_OK | W_OK))
 		{
-			run_client((void *)ctx);
+			if (run_client((void *)ctx) < 0)
+				unlink(ctx->socketpath);
 		}
 
 		char buffer[BUF_LEN];
 		int length;
-		length = read(ctx->inotifyfd, buffer, BUF_LEN);
+		length = read(inotifyfd, buffer, BUF_LEN);
 
 		if (length < 0)
 		{
-			err("read");
+			break;
 		}
 
 		int i = 0;
@@ -388,6 +393,7 @@ static void *_check_socket(void *arg)
 #if 0
 				else if (event->mask & IN_DELETE)
 				{
+					dbg("The file %s was unlinked.", event->name);
 				}
 				else if (event->mask & IN_MODIFY)
 				{
@@ -398,7 +404,7 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
-	free(ctx->socketpath);
+	close(inotifyfd);
 }
 #endif
 
@@ -407,9 +413,9 @@ int main(int argc, char **argv)
 {
 	const char *pidfile = NULL;
 	int mode = 0;
-	input_ctx_t input_data = {
+	input_ctx_t data = {
 		.root = "/tmp",
-		.name = basename(argv[0]),
+		.name = "putv",
 		.inputfd = {0},
 	};
 	const char *media_path;
@@ -422,13 +428,13 @@ int main(int argc, char **argv)
 		switch (opt)
 		{
 			case 'R':
-				input_data.root = optarg;
+				data.root = optarg;
 			break;
 			case 'n':
-				input_data.name = optarg;
+				data.name = optarg;
 			break;
 			case 'i':
-				input_data.inputfd[nbinputs++] = open(optarg, O_RDONLY);
+				data.inputfd[nbinputs++] = open(optarg, O_RDONLY);
 			break;
 			case 'm':
 				media_path = optarg;
@@ -469,7 +475,7 @@ int main(int argc, char **argv)
 	}
 
 	if (nbinputs == 0)
-		input_data.inputfd[nbinputs++] = open("/dev/input/event0", O_RDONLY);
+		data.inputfd[nbinputs++] = open("/dev/input/event0", O_RDONLY);
 	json_error_t error;
 	json_t *media;
 	media = json_load_file(media_path, 0, &error);
@@ -477,25 +483,28 @@ int main(int argc, char **argv)
 	{
 		media = json_object_get(media, "media");
 	}
-	if (! json_is_array(input_data.media))
+	if (! json_is_array(data.media))
 	{
-		json_decref(input_data.media);
-		input_data.media = NULL;
+		json_decref(data.media);
+		data.media = NULL;
 	}
-	input_data.media = media;
-#ifdef USE_INOTIFY
-	input_data.inotifyfd = inotify_init();
-	int dirfd = inotify_add_watch(input_data.inotifyfd, input_data.root,
-					IN_MODIFY | IN_CREATE | IN_DELETE);
-	input_data.run = 1;
-	_check_socket((void *)&input_data);
-#else
-	input_data.socketpath = malloc(strlen(input_data.root) + 1 + strlen(input_data.name) + 1);
-	sprintf(input_data.socketpath, "%s/%s", input_data.root, input_data.name);
+	data.run = 1;
+	data.media = media;
+	data.socketpath = malloc(strlen(data.root) + 1 + strlen(data.name) + 1);
+	sprintf(data.socketpath, "%s/%s", data.root, data.name);
 
-	run_client((void *)&input_data);
-	free(input_data.socketpath);
+	pthread_t thread;
+#ifdef USE_INOTIFY
+	pthread_create(&thread, NULL, (__start_routine_t)_check_socket, (void *)&data);
+#else
+	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
-	json_decref(input_data.media);
+	run(&data);
+
+	dbg("waiting end of thread");
+	pthread_join(thread, NULL);
+
+	json_decref(data.media);
+	free(data.socketpath);
 	return 0;
 }

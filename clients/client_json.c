@@ -70,6 +70,9 @@ static int answer_proto(client_data_t * data, json_t *json_params)
 {
 	client_event_prototype_t func;
 	void *funcdata;
+	if (data->run == 0)
+		return -1;
+
 	pthread_mutex_lock(&data->mutex);
 	data->pid = 0;
 	func = data->proto;
@@ -134,6 +137,24 @@ static int notification_onchange(json_t *json_params, json_t **result, void *use
 	while (event)
 	{
 		if (!strcmp(event->event, "onchange"))
+			break;
+		event = event->next;
+	}
+	int ret = 0;
+	if (event)
+	{
+		ret = event->proto(event->data, json_params);
+	}
+	return ret;
+}
+
+static int notification_onclose(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	client_event_t *event = data->events;
+	while (event)
+	{
+		if (!strcmp(event->event, "onclose"))
 			break;
 		event = event->next;
 	}
@@ -251,6 +272,7 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 {
 	if (data->pid > 0)
 	{
+		warn("client: request %d waiting", data->pid);
 		return -2;
 	}
 	pthread_mutex_lock(&data->mutex);
@@ -435,6 +457,7 @@ json_t *client_error_response(json_t *json_id, json_t *json_error, void *arg)
 
 int client_loop(client_data_t *data)
 {
+	int ret = -1;
 	client_event_t *event = data->events;
 	while (event)
 	{
@@ -447,10 +470,10 @@ int client_loop(client_data_t *data)
 	{
 		fd_set rfds;
 		int maxfd = data->sock;
+		struct timeval timeout = {5,0};
 		FD_ZERO(&rfds);
 		FD_SET(data->sock, &rfds);
-		int ret;
-		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		if (ret > 0 && FD_ISSET(data->sock, &rfds))
 		{
 #ifdef JSONRPC_LARGEPACKET
@@ -461,12 +484,14 @@ int client_loop(client_data_t *data)
 				if (response != NULL)
 				{
 					jsonrpc_jresponse(response, table, data);
+					ret = 0;
 				}
 				else
 				{
 					err("client: receive mal formated json %s", error.text);
-					data->pid = 0;
+					data->pid = -1;
 					data->run = 0;
+					ret = -1;
 				}
 			} while (data->message != NULL);
 #else
@@ -474,28 +499,34 @@ int client_loop(client_data_t *data)
 			ret = ioctl(data->sock, FIONREAD, &len);
 			char *buffer = malloc(len + 1);
 			ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-			buffer[ret] = 0;
 			if (ret > 0)
+			{
+				buffer[ret] = 0;
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
+			}
 			else //if (ret == 0)
 				data->run = 0;
 #endif
 		}
+		else if (ret == 0) //timeout
+		{
+			data->pid = 0;
+		}
 	}
+	notification_onclose(NULL, NULL, data);
 	dbg("client: end loop");
-	if (data->sock > 0)
-	{
-		shutdown(data->sock, SHUT_WR);
-		close(data->sock);
-	}
-	data->sock = 0;
 	pthread_cond_destroy(&data->cond);
 	pthread_mutex_destroy(&data->mutex);
-	return 0;
+	return ret;
 }
 
 void client_disconnect(client_data_t *data)
 {
 	data->run = 0;
-	shutdown(data->sock, SHUT_RD);
+	if (data->sock > 0)
+	{
+		shutdown(data->sock, SHUT_WR);
+		close(data->sock);
+		data->sock = 0;
+	}
 }

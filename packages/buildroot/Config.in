@@ -1,3 +1,2 @@
 source "$BR2_EXTERNAL_PUTV_PATH/package/putv/Config.in"
-source "$BR2_EXTERNAL_PUTV_PATH/package/tinysvcmdns/Config.in"
 

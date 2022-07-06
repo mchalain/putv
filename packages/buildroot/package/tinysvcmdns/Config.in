@@ -1,6 +1,0 @@
-
-config BR2_PACKAGE_TINYSVCMDNS
-	bool "tinysvcmdns: Embedded dns-ds server"
-	help
-	  https://github.com/ouistiti-project
-

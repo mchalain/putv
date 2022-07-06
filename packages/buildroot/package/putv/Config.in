@@ -1,6 +1,4 @@
-menu "Putv"
-
-config BR2_PACKAGE_PUTV
+menuconfig BR2_PACKAGE_PUTV
 	bool "putv: Embedded media streamer"
 	select BR2_PACKAGE_LIBMAD
 	select BR2_PACKAGE_JANSSON
@@ -27,4 +25,3 @@ config BR2_PACKAGE_PUTV_UPNPRENDERER
 	select BR2_PACKAGE_GMRENDER_RESURRECT2
 	depends on BR2_PACKAGE_PUTV
 
-endmenu

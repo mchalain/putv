@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>Ouistiti: Radio</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<link type="text/css" rel="stylesheet" href="/trust/css/glyphicons.css">
+		<link type="text/css" rel="stylesheet" href="/trust/bootstrap-5/css/bootstrap.min.css">
+		<script type="text/javascript" src="/trust/bootstrap-5/js/bootstrap.bundle.min.js"></script>
+		<script type="text/javascript" src="/trust/js/jquery.min.js"></script>
+		<script type="text/javascript" src="/common/js/jsonrpc.js"></script>
+		<style>
+			@media only screen and (min-height: 768px) {
+				.playlist-item {padding-top: 15px;}
+
+			}
+			@media only screen and (max-height: 768px) {
+				.playlist-item {padding-top: 0;}
+				.h3,.h3 {
+					font-size:16px;
+					overflow: hidden;
+				}
+			}
+			@media only screen and (max-width: 768px) {
+			}
+			@media only screen and (max-width: 992px) {
+			}
+			@media only screen and (min-width: 768px) {
+			}
+			.pager {margin: 10px 0;}
+			.media.active * {
+				color: #d9edf7;
+			}
+			.media.active {
+				z-index: 2;
+				color: #d9edf7;
+				background-color: #337ab7;
+				border-color: #337ab7;
+			}
+			.media {
+				padding-top:10px;
+			}
+			.hidden { display:none !important;}
+		</style>
+		<script type="text/javascript">
+class FormObject
+{
+	#entry = 'entry';
+	constructor(form)
+	{
+		if (form != undefined)
+			this.#entry = form;
+	}
+	#fill_array(field, parentid)
+	{
+		for (const i in field)
+		{
+			let id = parentid+'_'+i;
+			let elemt = $('#'+parentid);
+			let li = elemt.find("li[id='"+id+"']");
+			if (li.length == 0)
+			{
+				li = elemt.find("li").clone();
+				li.attr("id", id);
+				let input = li.find("input");
+				input.each(function(unused, elemt)
+					{
+						let name = $(elemt).attr("id");
+						$(elemt).attr("id", id+"_"+name);
+					});
+				let label = li.find("label");
+				label.each(function(unused, elemt)
+					{
+						let name = $(elemt).attr("for");
+						$(elemt).attr("for", id+"_"+name);
+					});
+				elemt.append(li[0]);
+			}
+			li.removeClass("hidden");
+			this.#fill_object(field[i], id);	
+		}
+	}
+	#fill_object(field, parentid)
+	{
+		for ( const property in field)
+		{
+			let id = parentid+'_'+property;
+			let elemt = $('#'+id);
+			let value = field[property];
+			if (Array.isArray(value) && elemt.is("ul"))
+			{
+				this.#fill_array(value, id);
+			}
+			else if (jQuery.isPlainObject(value))
+			{
+				this.#fill_object(value, id);
+			}
+			else if (elemt.is("input"))
+			{
+				elemt.val(value);
+			}
+			else if (elemt.is("select"))
+			{
+				let option = elemt.children("option[value='"+value+"']");
+				if (option.length == 0 && value != undefined && value.length > 0)
+				{
+					option = elemt.children("option").clone();
+					option.val(value);
+					option.text(value);
+					elemt.append(option[0]);
+				}
+				option.prop("selected", true);
+			}
+		}
+	}
+	_set(object)
+	{
+		let inputs = $('#'+this.#entry+' input');
+		inputs.val("");
+		this.#fill_object(object, this.#entry);
+	}
+	_get()
+	{
+		let entry = {};
+		var get_entry = function(levels)
+		{
+			let entry_iterator = this;
+			for (let i = 1; i < (levels.length - 1); i ++)
+			{
+				if (entry_iterator[levels[i]] == undefined)
+				{
+					let numeric = parseInt(levels[i + 1],10);
+					if (!isNaN(numeric))
+					{
+						entry_iterator[levels[i]] = [];
+					}
+					else
+						entry_iterator[levels[i]] = {};
+				}
+				entry_iterator = entry_iterator[levels[i]];
+			}
+			return entry_iterator;
+		}.bind(entry);
+
+		let inputs = $('#'+this.#entry+' input');
+		inputs.each($.proxy(function(index, element)
+			{
+				let levels = $(element).attr('id').split('_');
+				let target = $(element).closest("form").attr("id");
+				if (levels[0] != target)
+					return 0;
+				let entry_iterator = get_entry(levels);
+
+				let value = $(element).val();
+				if (value != undefined && value.length > 0)
+				{
+					let numeric = parseFloat(value);
+					if (isNaN(numeric))
+						entry_iterator[levels[levels.length - 1]] = value;
+					else
+						entry_iterator[levels[levels.length - 1]] = numeric;
+				}
+			}, this));
+		let selects = $('#'+this.#entry+' select');
+		selects.each($.proxy(function(index, element)
+			{
+				let levels = $(element).attr('id').split('_');
+				let target = $(element).closest("form").attr("id");
+				if (levels[0] != target)
+					return 0;
+				let entry_iterator = get_entry(levels);
+
+				let value = $(element).val();
+				if (value != undefined && value.length > 0)
+				{
+					let numeric = parseFloat(value);
+					if (isNaN(numeric))
+						entry_iterator[levels[levels.length - 1]] = value;
+					else
+						entry_iterator[levels[levels.length - 1]] = numeric;
+				}				
+			}, this));
+		return entry;
+	}
+}
+
+class Database extends Map
+{
+	#filter;
+	#url;
+	#run_import;
+	constructor()
+	{
+		super();
+	}
+	filter(searchstring)
+	{
+		this.#filter = new Array();
+		for ( let element of this.keys())
+			this.#filter.push(element);
+		if (searchstring != undefined)
+		{
+			let keywords = searchstring.split(' ');
+			for ( let word in keywords)
+			{
+				let tfilter = this.#filter;
+				this.#filter = new Array();
+				let field = keywords[word].match(/.*:/);
+				let value = keywords[word];
+				if (field != undefined)
+				{
+					field = field[0].slice(0, -1);
+					value = keywords[word].match(/:.*/)[0].slice(1);
+				}
+				value = new RegExp(value, "i");
+				for ( let dbindex of tfilter)
+				{
+					let element = super.get(dbindex);
+					var search = function(object, regexp, field, dbindex)
+						{
+							if (typeof object == "string" &&
+								object.match(regexp) &&
+								field == undefined &&
+								this.#filter.indexOf(dbindex) == -1)
+							{
+								this.#filter.push(dbindex);
+							}
+							else if (typeof object == "object" && object != undefined)
+							{
+								for ( const [key, element] of Object.entries(object))
+								{
+									let tfield = field;
+									if (field != undefined && field == key)
+									{
+										
+										tfield = undefined;
+									}
+									search(element, regexp, tfield, dbindex);
+								}
+							}
+						}.bind(this);
+					if (element != undefined)
+						search(element, value, field, dbindex);
+				}
+			}
+		}
+		return this.#filter.length;
+	}
+
+	delete(id)
+	{
+		let ret = false;
+		if (this.#filter == undefined)
+			ret = super.delete(id);
+		else if (id > -1 && this.#filter.length > id)
+		{
+			let lastid = this.#filter[id];
+			this.#filter.splice(id, 1);
+			ret = super.delete(lastid);
+		}
+		return ret;
+	}
+
+	_get(id)
+	{
+		if (this.#filter == undefined)
+			return super.get(id);
+		if (id > -1 && this.#filter.length > id)
+		{
+			return super.get(this.#filter[id]);
+		}
+		return null;
+	}
+	_set(id, object)
+	{
+		if (id == -1)
+		{
+			let id = -1;
+			if (object.id == undefined)
+			{
+				this.forEach(function(value, key, map)
+					{
+						if (id < value.id)
+							id = value.id + 1;
+					});
+				object.id = id;
+			}
+			if (id != -1)
+				super.set(id, object);
+		}
+		else if (this.#filter && this.#filter.length > id)
+			super.set(this.#filter[id], object);
+		else
+			super.set(id, object);
+	}
+
+	get size()
+	{
+		if (this.#filter == undefined)
+			return super.size;
+		return this.#filter.length;
+	}
+	stringify()
+	{
+		return JSON.stringify(this);
+	}
+
+	_import_cancel()
+	{
+		this.#run_import = false;
+	}
+
+	_import_ws(url, callback, progress)
+	{
+		let rpc = new JsonRPC(url);
+		rpc.onopen = function() {
+			this.#run_import = true;
+			rpc.send("list", {maxitems:10, first:0});
+		}.bind(this);
+		rpc.list = function(result) {
+			if (result.playlist && Array.isArray(result.playlist))
+			{
+				result.playlist.map(function(value, id, database) {
+					// !!! value.id != id
+					if (value.id != undefined)
+						this._set(value.id, value);
+				}, this);
+				if (typeof progress === "function")
+					progress(this.size, result.count);
+			}
+			if (this.size < result.count && this.#run_import)
+				rpc.send("list", {maxitems:10, first:this.size});
+			else
+			{
+				rpc.close();
+				if (typeof callback === "function")
+					callback(this);
+			}
+		}.bind(this);
+		rpc.connect();
+	}
+
+	_import(url, callback, progress)
+	{
+		this.base = url.match(/.*\//);
+		$.ajax({
+			url: url
+		}).done($.proxy(function(database) {
+			if (Array.isArray(database))
+			{
+				database.map(function (value, id, database)
+					{
+						if (value.id != undefined)
+							this.set(value.id, value);
+					}, this);
+			}
+			else if (value.id != undefined)
+				this.set(database.id, database);
+			if (typeof callback === "function")
+				callback(this);
+		}, this)).fail(function(data) {
+			console.log( "error "+data.responseText);
+			var object = JSON.parse(data.responseText);
+		}).always(function() {
+			$('#db_control_import span').removeClass("spinner-grow");
+		});
+	}
+	_export(url)
+	{
+		const regex = /.json/i;
+		tempo = this.#url.replace(regex,".new.json");
+		console.log("export "+ tempo);
+		$.ajax(tempo, {
+			data : this.stringify(),
+			contentType : 'application/json',
+			type : 'PUT'
+		}).done($.proxy(function(data) {
+			$.ajax("/apps/checkdb.cgi", {
+				data : {db:url, tempo:tempo},
+				type : 'POST'
+			}).done(function(response) {
+				alert(response);
+			});
+		})).fail(function(data) {
+			console.log( "error "+data.responseText);
+			if (data.state() == "success")
+				var object = JSON.parse(data.responseText);
+		}).always(function() {
+			$('#db_control_export span').removeClass("spinner-grow");
+		});
+	}
+};
+
+$(document).ready(function()
+{
+	var db;
+	var form;
+	$('#db_url').on( "change", function() {
+		var messagemodal = $("#message");
+		messagemodal.find(".modal-body p").addClass("hidden");
+		messagemodal.find(".modal-body p.string_wait").removeClass("hidden");
+		messagemodal.modal("show");
+		db = new Database();
+		messagemodal.on("bs-close", db._import_cancel.bind(db));
+		form = new FormObject('entry');
+		db._import_ws("/putv", function(db) {
+				messagemodal.modal("hide");
+				let nbentries = db.filter();
+				$('#db_control_nbentries').val(nbentries);
+				$('#db_control_index').val(0);
+				$('#db_control_index').trigger("change");
+		}, function(nbentries,max) {
+			$('#db_control_nbentries').val(nbentries);
+			let width = (nbentries / max) * 100;
+			$('#import_progress').attr('aria-valuemax',max).attr('aria-valuenow',nbentries).css("width", width + "%");
+		});
+	});
+
+	$('#db_control_index').on("change", function(event) {
+			if (!$('#db_control_index').prop("disabled"))
+			{
+				form._set(db._get($('#db_control_index').val()));
+			}
+			else
+			{
+				var messagemodal = $("#message");
+				messagemodal.find(".modal-body p").addClass("hidden");
+				messagemodal.find(".modal-body p.string_not_saved").removeClass("hidden");
+				messagemodal.modal("show");
+			}
+		});
+	$('#db_control_next').on("click", function(event) {
+			if (!$('#db_control_index').prop("disabled"))
+			{
+				let valuemax = db.size;
+				let value = parseInt($('#db_control_index').val(), 10);
+				if (value < valuemax)
+					$('#db_control_index').val(value + 1);
+			}
+			$('#db_control_index').trigger("change");
+		});
+	$('#db_control_forward').on("click", function(event) {
+			if (!$('#db_control_index').prop("disabled"))
+			{
+				let valuemax = db.size;;
+				let value = parseInt($('#db_control_index').val(), 10);
+				if (value + 10 < valuemax)
+					$('#db_control_index').val(value + 10);
+				else
+					$('#db_control_index').val(valuemax);
+			}
+			$('#db_control_index').trigger("change");
+		});
+	$('#db_control_previous').on("click", function(event) {
+			if (!$('#db_control_index').prop("disabled"))
+			{
+				let value = parseInt($('#db_control_index').val(), 10);
+				if (value > 0)
+					$('#db_control_index').val(value - 1);
+				else
+					$('#db_control_index').val(0);
+			}
+			$('#db_control_index').trigger("change");
+		});
+	$('#db_control_backward').on("click", function(event) {
+			if (!$('#db_control_index').prop("disabled"))
+			{
+				let value = parseInt($('#db_control_index').val(), 10);
+				if (value > 10)
+					$('#db_control_index').val(value - 10);
+				else
+					$('#db_control_index').val(0);
+			}
+			$('#db_control_index').trigger("change");
+		});
+	$('#db_control_search_button').on("click", function(event) {
+			let nbentries = db.filter($('#db_control_search_input').val());
+			$('#db_control_nbentries').val(nbentries);
+			$('#db_control_index').val(0).trigger("change");
+		});
+	$('#db_control_import').on("click", function(event) {
+			$('#db_control_import span').addClass("spinner-grow");
+			$('#db_url').trigger("change");
+		});
+	$('#db_control_export').on("click", function(event) {
+			$('#db_control_export span').addClass("spinner-grow");
+			db._export($('#db_url').val());
+		});
+	$('#db_control_delete').on("click", function(event) {
+			let value = parseInt($('#db_control_index').val(), 10);
+			if (db.delete(value))
+				$('#db_control_index').trigger("change");
+		});
+	$('#entry').find("input").on("change", function(event) {
+			$('#db_control_index').prop("disabled", true);
+			$('#db_control_save').removeClass("disabled").attr("aria-disabled","false");
+			$('#db_control_revert').removeClass("disabled").attr("aria-disabled","false");
+		});
+	$('#entry').find("select").on("change", function(event) {
+			$('#db_control_index').prop("disabled", true);
+			$('#db_control_save').removeClass("disabled").attr("aria-disabled","false");
+			$('#db_control_revert').removeClass("disabled").attr("aria-disabled","false");
+		});
+	$('#db_control_save').on("click", function(event) {
+			db._set($('#db_control_index').val(), form._get());
+			$('#db_control_index').prop("disabled", false);
+			$('#db_control_save').addClass("disabled").attr("aria-disabled","true");
+			$('#db_control_revert').addClass("disabled").attr("aria-disabled","true");
+			$('#db_control_index').trigger("change");
+		});
+	$('#db_control_revert').on("click", function(event) {
+			form._set(db._get($('#db_control_index').val()));
+			$('#db_control_index').prop("disabled", false);
+			$('#db_control_save').addClass("disabled").attr("aria-disabled","true");
+			$('#db_control_revert').addClass("disabled").attr("aria-disabled","true");
+		});
+
+	$('#message').on("hidden.bs.modal", function(event)
+		{
+			$('#message').find(".modal-body p").addClass("hidden");
+		});
+	$('#musicplayer').find('audio').on("emptied", function() {
+			$('#musicplayer .modal-title').removeClass("bg-danger");
+		});
+	$('#musicplayer').find('audio').on("error", function() {
+			$('#musicplayer .modal-title').addClass("bg-danger");
+		});
+	$('#musicplayer').find('audio').on("stalled", function() {
+			$('#musicplayer .modal-title').addClass("bg-danger");
+		});
+
+	imageviewer_set = function(url)
+	{
+		$('#imageviewer').find('img').attr('src', db.base + url);
+	}
+	musicplayer_set = function(url)
+	{
+		const regexp = "file://";
+		let src = db.base + url.replace(regexp,"");
+		console.log(src);
+		var audio = $('#musicplayer').find('audio')[0];
+		audio.load();
+		var source = $('#musicplayer').find('source')[0];
+		//$(source).parent()[0].load();
+		$(source).attr('src', src).appendTo($(source).parent());
+	}
+	// viewer ready to start
+	$('#db_url').trigger("change");
+
+/*
+	$("body").prepend('<div class="container-fluid w-50"><p class="glyphicon"></p></div>');
+	characters = "";
+	for ( let j = 0; j < 3; j++)
+	{
+		characters += "<br/>"+j+"00: ";
+		for ( let i = 0; i < 10; i++)
+			characters += "&#xe"+j+"0"+i+"; ";
+		for ( let i = 10; i < 100; i++)
+		{
+			if ( i % 10 == 0)
+				characters += "<br/>"+j+i+": ";
+			characters += "&#xe"+j+i+"; ";
+		}
+	}
+	$("p.glyphicon").html(characters);
+*/
+});
+		</script>
+	</head>
+	<body class="w-100 p-4 d-flex justify-content-center pb-4">
+		<div class="modal fade" tabindex="-1" id='imageviewer' aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Image</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						<img class="rounded img-thumbnail"/ src="#">
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="modal fade" tabindex="-1" id='musicplayer' aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Music</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body col-sm-4 col-sm-offset-4 embed-responsive embed-responsive-4by3">
+						<audio controls class="embed-responsive-item">
+							<source src="#">
+						</audio>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="modal fade" tabindex="-1" id='message' aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Message</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						<p class="hidden string_not_saved">Modification not saved <span class='glyphicon glyphicon-log-in'></span> or reverted <span class='glyphicon glyphicon-log-out'></span> !</p>
+						<p class="hidden string_wait">Please wait ! <span id='import_progress'class="progress-bar" style="height:5px" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></span></p>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="container-fluid w-50">
+			<input type="text" class="hidden" id='db_url' value="/media/musics.json"/>
+			<form  id='db_control'>
+				<input type="hidden" id='db_control_index' value="0"/>
+				<div class="d-flex flex-row justify-content-between">
+					<div class="p-2">
+						<div class="form-outline btn-group">
+							<a href="#" role="button" id='db_control_previous' class="btn btn-outline-default">
+								<span class="glyphicon glyphicon-step-backward"></span>
+							</a>
+							<a href="#" role="button" id='db_control_backward' class="btn btn-outline-default">
+								<span class="glyphicon glyphicon-backward"></span>
+							</a>
+						</div>
+					</div>
+					<div class="p-2">
+						<div class="form-outline btn-group" role="group">
+							<a id='db_control_import'   href="#" role="button" class="btn btn-outline-secondary"        	tabindex="-1" aria-disabled="false">
+								<span class="glyphicon glyphicon-import spinner-grow-sm" role="status"></span>
+							</a>
+							<a id='db_control_export'   href="#" role="button" class="btn btn-outline-secondary"        	tabindex="-1" aria-disabled="false">
+								<span class="glyphicon glyphicon-export spinner-grow-sm" role="status"></span>
+							</a>
+							<a  id='db_control_save'    href="#" role="button" class="btn btn-outline-secondary disabled" 	tabindex="-1" aria-disabled="true">
+								<span class="glyphicon glyphicon-log-in"></span>
+							</a>
+							<a id='db_control_revert'   href="#" role="button" class="btn btn-outline-secondary disabled" 	tabindex="-1" aria-disabled="true">
+								<span class="glyphicon glyphicon-log-out"></span>
+							</a>
+							<a id='db_control_delete'   href="#" role="button" class="btn btn-outline-secondary"			tabindex="-1" aria-disabled="true">
+								<span class="glyphicon glyphicon-trash"></span>
+							</a>
+							<div class="input-group">
+								<input id='db_control_search_input' type="search" class="form-control" placeholder="Search"/>
+								<a id='db_control_search_button' href="#" role="button" class="btn btn-outline-secondary">
+									<span class="glyphicon glyphicon-search"></span>
+								</a>
+							</div>
+							<div class="input-group w-25">
+								<input id='db_control_nbentries' type="number" class="form-control" readonly/>
+							</div>
+						</div>
+					</div>
+					<div class="p-2">
+						<div class="form-outline btn-group">
+							<a href="#" role="button" id='db_control_forward'     class="btn btn-outline-default">
+								<span class="glyphicon glyphicon-forward"></span>
+							</a>
+							<a href="#" role="button" id='db_control_next'     class="btn btn-outline-default">
+								<span class="glyphicon glyphicon-step-forward"></span>
+							</a>
+						</div>
+					</div>
+				</div>
+			</form>
+			<form class="accordion accordion-flush" id='entry'>
+				<input type="hidden" id='entry_id' class="form-control" />
+				<div class="accordion-item">
+					<div class="accordion-body">
+						<div class="row">
+							<div class="col">
+								<div class="form-outline">
+									<input type="text" id='entry_info_artist' class="form-control" />
+									<label class="form-label" for="entry_info_artist">Artist</label>
+								</div>
+							</div>
+							<div class="col">
+								<div class="form-outline">
+									<input type="text" id='entry_info_album' class="form-control" />
+									<label class="form-label" for="entry_info_album">Album</label>
+								</div>
+							</div>
+						</div>
+						<div class="row">
+							<div class="col-sm-7">
+								<div class="form-outline">
+								  <input type="text" id='entry_info_title' class="form-control" />
+								  <label class="form-label" for="entry_info_title">Title</label>
+								</div>
+							</div>
+							<div class="col-sm">
+								<div class="form-outline">
+									<input type="number" id='entry_info_track' class="form-control" />
+									<label class="form-label" for="entry_info_track">Track</label>
+								</div>
+							</div>
+							<div class="col-sm-3">
+								<div class="input-group">
+									<div class="input-group-text"><span class="glyphicon glyphicon-thumbs-up"></span></div>
+									<input type="number" id='entry_info_likes' class="form-control" min="0" max="5"/>
+								</div>
+								<label class="form-label" for="entry_info_likes">Likes</label>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="accordion-item">
+					<h2 class="accordion-header" id='entry_infoHeading'>
+						<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#entry_infoBody" aria-expanded="false" aria-controls="entry_infoBody">
+							Info
+						</button>
+					</h2>
+					<div id='entry_infoBody' class="accordion-collapse collapse" aria-labelledby="entry_infoHeading">
+						<div class="accordion-body" id='entry_info'>
+							<div class="row">
+							  <div class="col-sm-3">
+								  <select class="form-select" id='entry_info_genre'>
+									  <option value="Unknown">Unknown</option>
+								  </select>
+								  <label class="form-label" for="entry_info_genre">Genre</label>
+							  </div>
+							  <div class="col-sm-7">
+								<div class="input-group">
+									<input type="text" id='entry_info_cover' class="form-control" />
+									<a href="#" role="button" onclick="imageviewer_set($('#entry_info_cover').val());" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#imageviewer" ><span class="glyphicon glyphicon-picture"></span></a>
+								</div>
+								<label class="form-label" for="entry_info_cover">Cover</label>
+							  </div>
+							</div>
+							<div class="row">
+							  <div class="col-sm-9">
+								<div class="form-outline">
+								  <input type="text" id='entry_info_comment' class="form-control" />
+								  <label class="form-label" for="entry_info_comment">Comment</label>
+								</div>
+							  </div>
+							  <div class="col-sm">
+								<div class="form-outline">
+								  <input type="month" id='entry_info_year' class="form-control" />
+								  <label class="form-label" for="entry_info_year">Year</label>
+								</div>
+							  </div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="accordion-item">
+					<h2 class="accordion-header" id='ntry_sourcesHeading'>
+						<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#entry_sourcesBody" aria-expanded="false" aria-controls="entry.info">
+							Sources
+						</button>
+					</h2>
+					<div id='entry_sourcesBody' class="accordion-collapse collapse" aria-labelledby="ntry_sourcesHeading">
+						<ul class="accordion-body list-group" id='entry_sources'>
+							<li class="list-group-item hidden">
+								<div class="row">
+									<div class="col-sm-7">
+										<div class="input-group">
+											<input type="text" id='url' class="form-control" placeholder="URL"/>
+											<a href="#" role="button" onclick="musicplayer_set($(this).prev('input').val());" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#musicplayer" ><span class="glyphicon glyphicon-music"></span></a>
+										</div>
+										<label class="form-label" for="url">URL</label>
+									</div>
+									<div class="col-sm">
+										<div class="form-outline">
+											<input type="text" id='mime' class="form-control" placeholder="mime"/>
+											<label class="form-label" for="mime">mime</label>
+										</div>
+									</div>
+								</div>
+							</li>
+						</ul>
+					</div>
+				</div>
+			</form>
+		</div>
+	</body>
+</html>

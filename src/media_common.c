@@ -304,7 +304,7 @@ const char *utils_format2mime(jitter_format_t format)
 	return mime_octetstream;
 }
 
-static char *media_regfile(char *path, const char *mime, const unsigned char *data, unsigned long length)
+static const char *media_regfile(const char *path, const char *mime, const unsigned char *data, unsigned long length)
 {
 	int fd = -1;
 	char *ext = strrchr(path, '.');
@@ -313,13 +313,16 @@ static char *media_regfile(char *path, const char *mime, const unsigned char *da
 	else if (!strcmp(mime, mime_imagejpg) ||
 		!strcmp(mime, "image/jpeg"))
 		strcpy(ext, ".jpg");
-	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
-	if (fd > 0)
+	if (access(path, R_OK) != 0)
 	{
-		int ret = write(fd, data, length);
-		if (ret != length)
-			err("media: write image file error");
-		close(fd);
+		fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+		if (fd > 0)
+		{
+			int ret = write(fd, data, length);
+			if (ret != length)
+				err("media: write image file error");
+			close(fd);
+		}
 	}
 	return path;
 }
@@ -376,7 +379,7 @@ int media_parseid3tag(const char *path, json_t *object)
 		struct id3_frame const *frame = NULL;
 		frame = tag->frames[i];
 		warn("frame %s", frame->id);
-		media_dbg("field 0 type %d", field->type);
+		media_dbg("field %d type %d", i, frame->type);
 	}
 #endif
 	for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
@@ -387,32 +390,26 @@ int media_parseid3tag(const char *path, json_t *object)
 		frame = id3_tag_findframe(tag, labels[i].id, j);
 		while (frame != NULL)
 		{
-			int fieldid = 0;
 			union id3_field const *field;
-			enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_UTF_8;
-			const unsigned char *data = NULL;
-			unsigned long length = 0;
-			const char *info[ID3MAXFIELDS];
-			char *tinfo[ID3MAXFIELDS] = {0};
-			typedef char *(*id3_ucs4_duplicate_t)(id3_ucs4_t const *);
-			id3_ucs4_duplicate_t id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_utf8duplicate;
 			const char *mimetype = "image/png";
 
-			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < ID3MAXFIELDS; fieldid++)
+			for (int fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < ID3MAXFIELDS; fieldid++)
 			{
 				media_dbg("field[%s][%d] %s %d", frame->id, fieldid, labels[i].label, id3_field_type(field));
 				switch (id3_field_type(field))
 				{
 				case ID3_FIELD_TYPE_TEXTENCODING:
+				{
+					enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_UTF_8;
+					// the encoding is useless as we want utf8 for json string
 					encoding = id3_field_gettextencoding(field);
-					if (encoding == ID3_FIELD_TEXTENCODING_ISO_8859_1)
-						id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_latin1duplicate;
-					if (encoding == ID3_FIELD_TEXTENCODING_UTF_16)
-						id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_utf16duplicate;
+					media_dbg("field encoding: %d", encoding);
+				}
 				break;
 				case ID3_FIELD_TYPE_FRAMEID:
 				{
-					info[fieldid] = id3_field_getframeid(field);
+					const char *frid = id3_field_getframeid(field);
+					media_dbg("frameid %s", frid);
 				}
 				break;
 				case ID3_FIELD_TYPE_STRINGLIST:
@@ -430,29 +427,27 @@ int media_parseid3tag(const char *path, json_t *object)
 							ucs4 = id3_field_getstrings(field, k);
 							if (labels[i].id == ID3_FRAME_GENRE)
 								ucs4 = id3_genre_name(ucs4);
-							char *latin1 = id3_ucs4_duplicate(ucs4);
-							fieldvalue = json_string(latin1);
-							free(latin1);
+							id3_utf8_t *utf8 = id3_ucs4_utf8duplicate(ucs4);
+							fieldvalue = json_string(utf8);
 							json_array_append(value, fieldvalue);
+							free(utf8);
 						}
 					}
 					else if (nb == 1)
 					{
-						json_t *fieldvalue;
 						id3_ucs4_t const *ucs4 = NULL;
 						ucs4 = id3_field_getstrings(field, k);
 						if (labels[i].id == ID3_FRAME_GENRE)
 							ucs4 = id3_genre_name(ucs4);
-						char *latin1 = id3_ucs4_duplicate(ucs4);
+						id3_utf8_t *utf8 = id3_ucs4_utf8duplicate(ucs4);
 						if (labels[i].id == ID3_FRAME_YEAR ||
 							labels[i].id == ID3_FRAME_TRACK ||
 							labels[i].id == "RGAD" ||
 							labels[i].id == "TLEN")
-							fieldvalue = json_integer(atoi(latin1));
+							value = json_integer(atoi((char *)utf8));
 						else
-							fieldvalue = json_string(latin1);
-						free(latin1);
-						value = fieldvalue;
+							value = json_string(utf8);
+						free(utf8);
 					}
 				}
 				break;
@@ -467,42 +462,45 @@ int media_parseid3tag(const char *path, json_t *object)
 				break;
 				case ID3_FIELD_TYPE_STRING:
 				{
-					json_t *fieldvalue;
 					id3_ucs4_t const *ucs4 = NULL;
 					ucs4 = id3_field_getstring(field);
-					char *latin1 = id3_ucs4_duplicate(ucs4);
+					id3_utf8_t *utf8 = id3_ucs4_utf8duplicate(ucs4);
 					if (labels[i].id == ID3_FRAME_YEAR ||
 						labels[i].id == ID3_FRAME_TRACK ||
 						labels[i].id == "RGAD" ||
 						labels[i].id == "TLEN")
-						fieldvalue = json_integer(atoi(latin1));
+						value = json_integer(atoi((char *)utf8));
 					else
-						fieldvalue = json_string(latin1);
-					free(latin1);
-					value = fieldvalue;
+						value = json_string(utf8);
+					free(utf8);
 				}
 				break;
 				case ID3_FIELD_TYPE_STRINGFULL:
 				{
 					id3_ucs4_t const *ucs4 = NULL;
 					ucs4 = id3_field_getfullstring(field);
-					tinfo[fieldid] = id3_ucs4_duplicate(ucs4);
-					value = json_string(tinfo[fieldid]);
+					id3_utf8_t *utf8 = id3_ucs4_utf8duplicate(ucs4);
+					value = json_string(utf8);
+					free(utf8);
 				}
 				break;
 				case ID3_FIELD_TYPE_LATIN1:
 				{
 					const char *latin1 = id3_field_getlatin1(field);
+					id3_ucs4_t *ucs4 = id3_latin1_ucs4duplicate(latin1);
+					id3_utf8_t *utf8 = id3_ucs4_utf8duplicate(ucs4);
 					if (labels[i].id == "APIC")
 						mimetype = latin1;
 					else
-						value = json_string(latin1);
+						value = json_string(utf8);
+					free(utf8);
+					free(ucs4);
 				}
 				break;
 				case ID3_FIELD_TYPE_LATIN1FULL:
 				{
-					info[fieldid] = id3_field_getfulllatin1(field);
-					value = json_string(info[fieldid]);
+					const char *latin1 = id3_field_getfulllatin1(field);
+					value = json_string(latin1);
 				}
 				break;
 				case ID3_FIELD_TYPE_DATE:
@@ -513,6 +511,9 @@ int media_parseid3tag(const char *path, json_t *object)
 				case ID3_FIELD_TYPE_BINARYDATA:
 				{
 					char coverpath[PATH_MAX];
+					const unsigned char *data = NULL;
+					unsigned long length = 0;
+
 					data = id3_field_getbinarydata(field, &length);
 					strcpy(coverpath, path);
 					char *name = strrchr(coverpath, '/');
@@ -521,15 +522,12 @@ int media_parseid3tag(const char *path, json_t *object)
 					else
 						name = coverpath;
 					strcpy(name, "cover.XXX");
-					char *latin1 = media_regfile(coverpath, mimetype, data, length);
+					const char *latin1 = media_regfile(coverpath, mimetype, data, length);
 					value = json_string(latin1);
 				}
 				break;
 				}
 			}
-			for (fieldid = 0; fieldid < ID3MAXFIELDS; fieldid++)
-				if (tinfo[fieldid] != NULL)
-					free(tinfo[fieldid]);
 			if (value == NULL)
 				value = json_null();
 

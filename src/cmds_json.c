@@ -1302,8 +1302,7 @@ static ssize_t _cmds_recv(void *buff, size_t size, void *userctx)
 	if (ret <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
-		close(sock);
-		info->sock = -1;
+		_cmds_json_removeinfo(ctx, info);
 		return ret;
 	}
 

@@ -60,7 +60,7 @@ typedef struct thread_server_s
 typedef int (*client_routine_t)(struct thread_info_s *info);
 
 typedef void *(*start_routine_t)(void*);
-int start(client_routine_t service, thread_info_t *info)
+static int start(client_routine_t service, thread_info_t *info)
 {
 	pthread_t thread;
 	pthread_create(&thread, NULL, (start_routine_t)service, (void *)info);
@@ -75,6 +75,7 @@ void unixserver_remove(thread_info_t *info)
 		err("the list must be never empty when removing");
 		return;
 	}
+	warn("unix: remove server");
 	/**
 	 * firstinfo is an empty client socket
 	 */
@@ -86,6 +87,7 @@ void unixserver_remove(thread_info_t *info)
 	}
 	if (it != NULL)
 		it->next = info->next;
+	shutdown(info->sock, SHUT_RDWR);
 	close(info->sock);
 	free(info);
 	pthread_mutex_unlock(&server->lock);

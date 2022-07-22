@@ -189,9 +189,13 @@ static int method_info(cmds_ctx_t *ctx, const char *arg)
 
 static int method_search(cmds_ctx_t *ctx, const char *arg)
 {
-	int id = atoi(arg);
 	media_t *media = player_media(ctx->player);
-	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
+	if (arg != NULL)
+	{
+		int id = atoi(arg);
+		return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
+	}
+	return -1;
 }
 
 static int method_media(cmds_ctx_t *ctx, const char *arg)
@@ -247,6 +251,12 @@ static int method_quit(cmds_ctx_t *ctx, const char *arg)
 
 static int method_next(cmds_ctx_t *ctx, const char *arg)
 {
+	if (arg != NULL)
+	{
+		int id = atoi(arg);
+		if (id > -1)
+			player_play(ctx->player, id);
+	}
 	return (player_state(ctx->player, STATE_CHANGE) == STATE_CHANGE);
 }
 

@@ -96,7 +96,7 @@ static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id,  media_parse_t cb, void *data);
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data);
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data);
+static int media_play(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
@@ -1234,8 +1234,9 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	return count;
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
+static int media_play(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
+	ctx->mediaid = id;
 	media_find(ctx, ctx->mediaid, cb, data);
 	return ctx->mediaid;
 }

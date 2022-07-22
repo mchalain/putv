@@ -69,7 +69,7 @@ struct media_url_s
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
-static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
+static int media_play(media_ctx_t *ctx, int id, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
@@ -248,7 +248,7 @@ static int media_next(media_ctx_t *ctx)
 	return ret;
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
+static int media_play(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
 	int ret = -1;
 
@@ -257,7 +257,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 	 * otherwise we manage the loop.
 	 */
 	if (ctx->current != NULL && cb != NULL)
-		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
+		ret = media_find(ctx, id, cb, data);
 	if (ret > -1)
 		ret = ctx->current->id;
 	return ret;

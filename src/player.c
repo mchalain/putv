@@ -346,9 +346,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 int player_play(player_ctx_t *ctx, int id)
 {
 	int ret = -1;
-	if (ctx->media && ctx->media->ops->find != NULL)
+	if (ctx->media && ctx->media->ops->play != NULL)
 	{
-		ret = ctx->media->ops->find(ctx->media->ctx, id, _player_play, ctx);
+		ret = ctx->media->ops->play(ctx->media->ctx, id, _player_play, ctx);
 		ret -= 1;
 	}
 	return ret;
@@ -395,19 +395,21 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			dbg("player: stop");
 		break;
 		case STATE_PLAY:
+		{
 			dbg("player: playing");
 			if (pause)
 				break;
+			int id;
 			/// prepare nextsrc
 			if (ctx->media->ops->next)
-				ctx->media->ops->next(ctx->media->ctx);
+				id = ctx->media->ops->next(ctx->media->ctx);
 			else if (ctx->media->ops->end)
-				ctx->media->ops->end(ctx->media->ctx);
+				id = ctx->media->ops->end(ctx->media->ctx);
 			/**
 			 * media will call _player_play
 			 * and this one will set ctx->nextsrc
 			 */
-			ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
+			ctx->media->ops->play(ctx->media->ctx, id, _player_play, ctx);
 			/**
 			 * there isn't any stream in the player
 			 * the new one is on nextsrc, then player pass on CHANGE
@@ -415,6 +417,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			 */
 			if (ctx->src == NULL)
 				state = STATE_CHANGE | pause;
+		}
 		break;
 		case STATE_CHANGE:
 			if (ctx->src != NULL)

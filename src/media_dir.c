@@ -105,7 +105,7 @@ struct media_dirlist_s
 
 static int media_count(media_ctx_t *ctx);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
-static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
+static int media_play(media_ctx_t *ctx, int id, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
@@ -354,10 +354,11 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 	return ret;
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
+static int media_play(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 {
-	if (ctx->mediaid >= 0)
+	if (id >= 0)
 	{
+		ctx->mediaid = id;
 		int ret = -1;
 		ret = media_find(ctx, ctx->mediaid, cb, arg);
 		if (ret == 0)
@@ -396,7 +397,7 @@ static int media_next(media_ctx_t *ctx)
 	ctx->mediaid = mediaid;
 	pthread_mutex_unlock(&ctx->mutex);
 	if (ctx->firstmediaid == -1)
-		ctx->firstmediaid = ctx->mediaid;
+		ctx->firstmediaid = mediaid;
 	if (ret != 0)
 	{
 		if (ctx->current)
@@ -404,25 +405,25 @@ static int media_next(media_ctx_t *ctx)
 			ctx->current = _free_medialist(ctx->current, 0);
 		}
 		ctx->current = NULL;
-		if (ctx->count > ctx->mediaid + 1)
+		if (ctx->count > mediaid + 1)
 		{
-			ctx->mediaid = ctx->mediaid + 1;
+			mediaid = mediaid + 1;
 		}
 		else if (ctx->options & OPTION_LOOP)
 		{
-			ctx->mediaid = ctx->firstmediaid;
+			mediaid = ctx->firstmediaid;
 		}
 		else
-			ctx->mediaid = -1;
+			mediaid = -1;
 	}
-	return ctx->mediaid;
+	return mediaid;
 }
 
 static int media_end(media_ctx_t *ctx)
 {
 	ctx->current = _free_medialist(ctx->current, 0);
 	ctx->mediaid = -1;
-	return 0;
+	return ctx->mediaid;
 }
 
 /**

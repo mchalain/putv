@@ -112,7 +112,7 @@ struct media_ops_s
 	/**
 	 * mandatory
 	 */
-	int (*play)(media_ctx_t *ctx, media_parse_t play, void *data);
+	int (*play)(media_ctx_t *ctx, int id, media_parse_t play, void *data);
 	/**
 	 * optional
 	 */

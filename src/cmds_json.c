@@ -1290,6 +1290,26 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 }
 #endif
 
+static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
+{
+	thread_info_t *it = ctx->info;
+	if (ctx->info == info)
+	{
+		ctx->info = ctx->info->next;
+	}
+	else
+	{
+		while (it != NULL && it->next != NULL && it->next != info)
+		{
+			it = it->next;
+		}
+		if (it != NULL)
+			it->next = info->next;
+	}
+
+	unixserver_remove(info);
+}
+
 static ssize_t _cmds_recv(void *buff, size_t size, void *userctx)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
@@ -1386,25 +1406,6 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	return ret;
 }
 
-static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
-{
-	thread_info_t *it = ctx->info;
-	if (ctx->info == info)
-	{
-		ctx->info = ctx->info->next;
-	}
-	else
-	{
-		while (it != NULL && it->next != NULL && it->next != info)
-		{
-			it = it->next;
-		}
-		if (it != NULL)
-			it->next = info->next;
-	}
-
-	unixserver_remove(info);
-}
 /**
  * this is the main loop for the sending
  * There is only one lopp for all clients

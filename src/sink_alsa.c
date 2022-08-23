@@ -57,8 +57,10 @@ struct sink_ctx_s
 	char samplesize;
 	char nchannels;
 
+#ifdef SINK_ALSA_NOISE
 	unsigned char *noise;
 	unsigned int noisecnt;
+#endif
 
 #ifdef SINK_DUMP
 	int dumpfd;
@@ -425,12 +427,14 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
 #endif
 
+#ifdef SINK_ALSA_NOISE
 	ctx->noise = malloc(ctx->buffersize);
 	int i = 0;
 	for (i = 0; i < ctx->buffersize; i++)
 	{
 		ctx->noise[i] = (char)random();
 	}
+#endif
 
 	ctx->player = player;
 
@@ -451,8 +455,9 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	{
 		int size = ctx->buffersize;
 		int samplerate = ctx->in->ctx->frequence;
-		if(_pcm_open(ctx, ctx->in->format, &samplerate, &size) == 0)
+		if (_pcm_open(ctx, ctx->in->format, &samplerate, &size) == 0)
 			ctx->samplerate = samplerate;
+#ifdef SINK_ALSA_NOISE
 		free(ctx->noise);
 		ctx->noise = malloc(ctx->buffersize);
 		int i = 0;
@@ -460,6 +465,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 		{
 			ctx->noise[i] = (char)random();
 		}
+#endif
 	}
 #ifdef SAMPLERATE_AUTO
 	ctx->in->ctx->frequence = 0;
@@ -516,8 +522,10 @@ static void *sink_thread(void *arg)
 				usleep(LATENCE_MS * 1000);
 				continue;
 			}
+#ifdef SINK_ALSA_NOISE
 			length = ctx->buffersize;
 			buff = ctx->noise;
+#endif
 			ctx->noisecnt ++;
 		}
 		else
@@ -530,10 +538,13 @@ static void *sink_thread(void *arg)
 			_alsa_checksamplerate(ctx);
 		}
 		//snd_pcm_mmap_begin
-		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
+		if (length > 0)
+		{
+			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
 #ifdef SINK_DUMP
-		write(ctx->dumpfd, buff, length);
+			write(ctx->dumpfd, buff, length);
 #endif
+		}
 		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
 		if (ret == -EPIPE)
 		{
@@ -638,7 +649,9 @@ static void alsa_destroy(sink_ctx_t *ctx)
 		snd_mixer_close(ctx->mixer);
 #endif
 
+#ifdef SINK_ALSA_NOISE
 	free(ctx->noise);
+#endif
 	jitter_destroy(ctx->in);
 	free(ctx);
 }

@@ -449,10 +449,10 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	int ret = 0;
 	if(ctx->in->ctx->frequence && (ctx->in->ctx->frequence != ctx->samplerate))
 	{
-		_pcm_close(ctx);
 		int size = ctx->buffersize;
-		ctx->samplerate = ctx->in->ctx->frequence;
-		_pcm_open(ctx, ctx->in->format, &ctx->samplerate, &size);
+		int samplerate = ctx->in->ctx->frequence;
+		if(_pcm_open(ctx, ctx->in->format, &samplerate, &size) == 0)
+			ctx->samplerate = samplerate;
 		free(ctx->noise);
 		ctx->noise = malloc(ctx->buffersize);
 		int i = 0;

@@ -400,6 +400,30 @@ int media_options(client_data_t *data, client_event_prototype_t proto, void *pro
 	return _client_generic(data, proto, protodata, "options");
 }
 
+static int _media_wait(void *eventdata, json_t *json_params)
+{
+	pthread_cond_t *cond = (pthread_cond_t *)eventdata;
+	pthread_cond_broadcast(cond);
+	return 0;
+}
+
+int media_wait(client_data_t *data, int nb)
+{
+	pthread_cond_t cond;
+	pthread_mutex_t mutex;
+	pthread_cond_init(&cond, NULL);
+	pthread_mutex_init(&mutex, NULL);
+
+	client_eventlistener(data, "onchange", _media_wait, &cond);
+	while (nb > 0)
+	{
+		pthread_cond_wait(&cond, &mutex);
+	}
+	pthread_cond_destroy(&cond);
+	pthread_mutex_destroy(&mutex);
+	return 0;
+}
+
 #ifdef JSONRPC_LARGEPACKET
 static size_t recv_cb(void *buffer, size_t len, void *arg)
 {

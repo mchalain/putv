@@ -31,6 +31,7 @@
 #include <fcntl.h>
 
 #include <pthread.h>
+#include <signal.h>
 #include <errno.h>
 
 #include <sys/types.h>
@@ -204,6 +205,11 @@ static const struct cmd_s cmds[] = {{
 		.method = method_shuffle,
 		.help = "change the shuffle mode\n" \
 			"        <on|off>",
+	},{
+		.shortkey = 0,
+		.name = "wait",
+		.method = method_wait,
+		.help = "ait a number of media changing\n        <0..100>",
 	},{
 		.shortkey = 0,
 		.name = "quit",
@@ -535,6 +541,13 @@ static int method_quit(ctx_t *ctx, const char *arg)
 {
 	client_disconnect(ctx->client);
 	ctx->run = 0;
+	return 0;
+}
+
+static int method_wait(ctx_t *ctx, const char *arg)
+{
+	int nb = atoi(arg);
+	media_wait(ctx->client,nb);
 	return 0;
 }
 

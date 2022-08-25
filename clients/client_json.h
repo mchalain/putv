@@ -74,5 +74,6 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 int media_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id);
 int media_setinfo(client_data_t *data, client_event_prototype_t proto, void *protodata, int id, json_t *info);
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop);
+int media_wait(client_data_t *data, int nb);
 
 #endif

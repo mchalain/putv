@@ -62,8 +62,6 @@ typedef void *(*__start_routine_t) (void *);
 typedef struct ctx_s ctx_t;
 struct ctx_s
 {
-	int inotifyfd;
-	int dirfd;
 	const char *root;
 	const char *name;
 	const char *cmdline_path;
@@ -568,19 +566,8 @@ int printevent(ctx_t *ctx, json_t *json_params)
 	return 0;
 }
 
-int run_client(void *arg)
+int run_shell(ctx_t *ctx)
 {
-	ctx_t *ctx = (ctx_t *)arg;
-
-	client_data_t data = {0};
-	client_unix(ctx->socketpath, &data);
-	client_async(&data, 1);
-	ctx->client = &data;
-
-	pthread_t thread;
-	client_eventlistener(&data, "onchange", (client_event_prototype_t)printevent, ctx);
-	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
-
 	int fd = 0;
 	ctx->run = 1;
 	while (ctx->run)
@@ -662,8 +649,22 @@ int run_client(void *arg)
 				fprintf(stdout, " command not found\n");
 		}
 	}
+	return 0;
+}
 
-	pthread_join(thread, NULL);
+int run_client(void *arg)
+{
+	ctx_t *ctx = (ctx_t *)arg;
+
+	client_data_t data = {0};
+	client_unix(ctx->socketpath, &data);
+	client_async(&data, 1);
+	ctx->client = &data;
+
+	client_eventlistener(&data, "onchange", (client_event_prototype_t)printevent, ctx);
+	client_loop(&data);
+
+	client_disconnect(&data);
 	return 0;
 }
 
@@ -674,6 +675,11 @@ int run_client(void *arg)
 static void *_check_socket(void *arg)
 {
 	ctx_t *ctx = (ctx_t *)arg;
+	int inotifyfd;
+
+	inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
 	int run = 1;
 	while (run)
 	{
@@ -684,7 +690,7 @@ static void *_check_socket(void *arg)
 
 		char buffer[BUF_LEN];
 		int length;
-		length = read(ctx->inotifyfd, buffer, BUF_LEN);
+		length = read(inotifyfd, buffer, BUF_LEN);
 
 		if (length < 0)
 		{
@@ -717,7 +723,7 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
-	free(ctx->socketpath);
+	close(inotifyfd);
 }
 #endif
 
@@ -771,14 +777,17 @@ int main(int argc, char **argv)
 	data.media = media;
 	data.socketpath = malloc(strlen(data.root) + 1 + strlen(data.name) + 1);
 	sprintf(data.socketpath, "%s/%s", data.root, data.name);
+
+	pthread_t thread;
 #ifdef USE_INOTIFY
-	data.inotifyfd = inotify_init();
-	int dirfd = inotify_add_watch(data.inotifyfd, data.root,
-					IN_MODIFY | IN_CREATE | IN_DELETE);
-	_check_socket((void *)&data);
+	pthread_create(&thread, NULL, (__start_routine_t)_check_socket, (void *)&data);
 #else
-	run_client((void *)&data);
+	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
+	run_shell(&data);
+
+	pthread_join(thread, NULL);
+
 	free(data.socketpath);
 	json_decref(data.media);
 	return 0;

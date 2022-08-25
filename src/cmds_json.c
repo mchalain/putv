@@ -1376,7 +1376,11 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		err("cmds: unkonwn event %s", event);
 	}
 	if (ret < 0)
+	{
 		err("cmd: json send error %s", strerror(errno));
+		if (errno != EPIPE)
+			ret = 0;
+	}
 	return ret;
 }
 

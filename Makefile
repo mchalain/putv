@@ -5,6 +5,6 @@ version=2.1
 
 subdir-$(JSONRPC)+=lib/jsonrpc
 subdir-y+=src
-subdir-y+=tests
+subdir-$(TESTS)+=tests
 subdir-y+=clients
 subdir-$(WEBAPP)+=www

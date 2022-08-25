@@ -189,9 +189,10 @@ class Database extends Map
 	#filter;
 	#url;
 	#run_import;
-	constructor()
+	constructor(baseurl)
 	{
 		super();
+		this.base = baseurl;
 	}
 	filter(searchstring)
 	{
@@ -340,38 +341,57 @@ class Database extends Map
 		rpc.connect();
 	}
 
-	_import(url, callback, progress)
+	_import_file(url, callback, progress)
 	{
-		this.base = url.match(/.*\//);
 		$.ajax({
-			url: url
-		}).done($.proxy(function(database) {
+			url: url,
+		}).done(function(database) {
 			if (Array.isArray(database))
 			{
 				database.map(function (value, id, database)
 					{
 						if (value.id != undefined)
-							this.set(value.id, value);
+							this._set(value.id, value);
 					}, this);
 			}
 			else if (value.id != undefined)
 				this.set(database.id, database);
-			if (typeof callback === "function")
-				callback(this);
-		}, this)).fail(function(data) {
+		}.bind(this)).fail(function(data) {
 			console.log( "error "+data.responseText);
 			var object = JSON.parse(data.responseText);
-		}).always(function() {
-			$('#db_control_import span').removeClass("spinner-grow");
+		}.bind(this)).always(function() {
+			if (typeof callback === "function")
+				callback(this);
+		}.bind(this));
+	}
+	_import(url, wsurl, callback, progress)
+	{
+		$.ajax({
+			url: url,
+			type: "HEAD",
+		}).done(function() {
+			this._import_file(url, callback, progress);
+		}.bind(this)).fail(function() {
+			this._import_ws(wsurl, callback, progress);
+		}.bind(this));
+	}
+	_export_data()
+	{
+		let data = [];
+		this.forEach(function(value, key, map) {
+			value.id = key;
+			data.push(value);
 		});
+		return JSON.stringify(data, null, 1);
 	}
 	_export(url)
 	{
 		const regex = /.json/i;
-		tempo = this.#url.replace(regex,".new.json");
+		let tempo = url.replace(regex,".new.json");
 		console.log("export "+ tempo);
-		$.ajax(tempo, {
-			data : this.stringify(),
+		$.ajax({
+			url: tempo,
+			data : this._export_data(),
 			contentType : 'application/json',
 			type : 'PUT'
 		}).done($.proxy(function(data) {
@@ -379,7 +399,9 @@ class Database extends Map
 				data : {db:url, tempo:tempo},
 				type : 'POST'
 			}).done(function(response) {
-				alert(response);
+				if (response.result === "KO") {
+					alert("error on command: "+response.cmd);
+				}
 			});
 		})).fail(function(data) {
 			console.log( "error "+data.responseText);
@@ -396,25 +418,18 @@ $(document).ready(function()
 	var db;
 	var form;
 	$('#db_url').on( "change", function() {
-		var messagemodal = $("#message");
-		messagemodal.find(".modal-body p").addClass("hidden");
-		messagemodal.find(".modal-body p.string_wait").removeClass("hidden");
-		messagemodal.modal("show");
-		db = new Database();
-		messagemodal.on("bs-close", db._import_cancel.bind(db));
-		form = new FormObject('entry');
-		db._import_ws("/putv", function(db) {
-				messagemodal.modal("hide");
-				let nbentries = db.filter();
-				$('#db_control_nbentries').val(nbentries);
-				$('#db_control_index').val(0);
-				$('#db_control_index').trigger("change");
-		}, function(nbentries,max) {
-			$('#db_control_nbentries').val(nbentries);
-			let width = (nbentries / max) * 100;
-			$('#import_progress').attr('aria-valuemax',max).attr('aria-valuenow',nbentries).css("width", width + "%");
-		});
 	});
+	$('#db_save_file').on("click", function(event) {
+			var fileContent = "My epic novel that I don't want to lose.";
+			var bb = new Blob([db._export_data() ], { type: 'application/json' });
+			var a = document.createElement('a');
+			// extract filename
+			const regex = /[ \w-]+\./i;
+			let tempo = regex.exec($('#db_url').val());
+			a.download = tempo+".json";
+			a.href = window.URL.createObjectURL(bb);
+			a.click();
+		});
 
 	$('#db_control_index').on("change", function(event) {
 			if (!$('#db_control_index').prop("disabled"))
@@ -480,7 +495,25 @@ $(document).ready(function()
 		});
 	$('#db_control_import').on("click", function(event) {
 			$('#db_control_import span').addClass("spinner-grow");
-			$('#db_url').trigger("change");
+			var messagemodal = $("#message");
+			messagemodal.find(".modal-body p").addClass("hidden");
+			messagemodal.find(".modal-body p.string_wait").removeClass("hidden");
+			messagemodal.modal("show");
+			db = new Database($("#db_baseurl").val());
+			messagemodal.on("bs-close", db._import_cancel.bind(db));
+			form = new FormObject('entry');
+			db._import($("#db_url").val(), "/putv", function(db) {
+					messagemodal.modal("hide");
+					let nbentries = db.filter();
+					$('#db_control_import span').removeClass("spinner-grow");
+					$('#db_control_nbentries').val(nbentries);
+					$('#db_control_index').val(0);
+					$('#db_control_index').trigger("change");
+			}, function(nbentries,max) {
+				$('#db_control_nbentries').val(nbentries);
+				let width = (nbentries / max) * 100;
+				$('#import_progress').attr('aria-valuemax',max).attr('aria-valuenow',nbentries).css("width", width + "%");
+			});
 		});
 	$('#db_control_export').on("click", function(event) {
 			$('#db_control_export span').addClass("spinner-grow");
@@ -514,7 +547,6 @@ $(document).ready(function()
 			$('#db_control_save').addClass("disabled").attr("aria-disabled","true");
 			$('#db_control_revert').addClass("disabled").attr("aria-disabled","true");
 		});
-
 	$('#message').on("hidden.bs.modal", function(event)
 		{
 			$('#message').find(".modal-body p").addClass("hidden");
@@ -543,9 +575,10 @@ $(document).ready(function()
 		var source = $('#musicplayer').find('source')[0];
 		//$(source).parent()[0].load();
 		$(source).attr('src', src).appendTo($(source).parent());
+		audio.play();
 	}
 	// viewer ready to start
-	$('#db_url').trigger("change");
+	$('#db_control_import').trigger("click");
 
 /*
 	$("body").prepend('<div class="container-fluid w-50"><p class="glyphicon"></p></div>');
@@ -581,21 +614,6 @@ $(document).ready(function()
 				</div>
 			</div>
 		</div>
-		<div class="modal fade" tabindex="-1" id='musicplayer' aria-hidden="true">
-			<div class="modal-dialog">
-				<div class="modal-content">
-					<div class="modal-header">
-						<h5 class="modal-title">Music</h5>
-						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-					</div>
-					<div class="modal-body col-sm-4 col-sm-offset-4 embed-responsive embed-responsive-4by3">
-						<audio controls class="embed-responsive-item">
-							<source src="#">
-						</audio>
-					</div>
-				</div>
-			</div>
-		</div>
 		<div class="modal fade" tabindex="-1" id='message' aria-hidden="true">
 			<div class="modal-dialog">
 				<div class="modal-content">
@@ -610,8 +628,23 @@ $(document).ready(function()
 				</div>
 			</div>
 		</div>
-		<div class="container-fluid w-50">
-			<input type="text" class="hidden" id='db_url' value="/media/musics.json"/>
+		<a href="#" role="button" onclick="$('#db_smartcontrol').removeClass('hidden')" class="btn btn-outline-default">
+			<span class="glyphicon glyphicon-"></span>
+		</a>
+		<div class="container-fluid w-75">
+			<form  id='db_smartcontrol' class="hidden">
+				<div class="form-outline">
+					<input type="text" id='db_url' class="form-control" value="/media/musics.json"/>
+				</div>
+				<div class="form-outline">
+					<input type="text" id='db_baseurl' class="form-control" value="/"/>
+				</div>
+				<div class="form-outline btn-group">
+					<a href="#" role="button" id='db_save_file' class="btn btn-outline-default">
+						<span class="glyphicon glyphicon-floppy-saved"></span>
+					</a>
+				</div>
+			</form>
 			<form  id='db_control'>
 				<input type="hidden" id='db_control_index' value="0"/>
 				<div class="d-flex flex-row justify-content-between">
@@ -754,25 +787,34 @@ $(document).ready(function()
 						</button>
 					</h2>
 					<div id='entry_sourcesBody' class="accordion-collapse collapse" aria-labelledby="ntry_sourcesHeading">
-						<ul class="accordion-body list-group" id='entry_sources'>
-							<li class="list-group-item hidden">
-								<div class="row">
-									<div class="col-sm-7">
-										<div class="input-group">
-											<input type="text" id='url' class="form-control" placeholder="URL"/>
-											<a href="#" role="button" onclick="musicplayer_set($(this).prev('input').val());" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#musicplayer" ><span class="glyphicon glyphicon-music"></span></a>
+						<div class="accordion-body">
+							<ul class="list-group" id='entry_sources'>
+								<li class="list-group-item hidden">
+									<div class="row">
+										<div class="col-sm-7">
+											<div class="input-group">
+												<input type="text" id='url' class="form-control" placeholder="URL"/>
+												<a href="#" role="button" onclick="musicplayer_set($(this).prev('input').val());" class="btn btn-outline-secondary" ><span class="glyphicon glyphicon-music"></span></a>
+											</div>
+											<label class="form-label" for="url">URL</label>
 										</div>
-										<label class="form-label" for="url">URL</label>
-									</div>
-									<div class="col-sm">
-										<div class="form-outline">
-											<input type="text" id='mime' class="form-control" placeholder="mime"/>
-											<label class="form-label" for="mime">mime</label>
+										<div class="col-sm">
+											<div class="form-outline">
+												<input type="text" id='mime' class="form-control" placeholder="mime"/>
+												<label class="form-label" for="mime">mime</label>
+											</div>
 										</div>
 									</div>
+								</li>
+							</ul>
+							<div class="row">
+								<div id='musicplayer' class="embed-responsive embed-responsive-4by3">
+									<audio controls class="embed-responsive-item w-100">
+										<source src="#">
+									</audio>
 								</div>
-							</li>
-						</ul>
+							</div>
+						</div>
 					</div>
 				</div>
 			</form>

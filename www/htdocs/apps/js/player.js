@@ -334,21 +334,21 @@ class PlayerCmd extends Player
 			case "next":
 				buttons_cmd.push({
 					id:action.method,
-					glyphicon:"fast-forward",
+					glyphicon:"fast-forward small",
 					name:action.method,
 				});
 			break;
 			case "stop":
 				buttons_cmd.push({
 					id:action.method,
-					glyphicon:action.method,
+					glyphicon:"stop small",
 					name:action.method,
 				});
 			break;
 			case "pause":
 				buttons_cmd.push({
 					id:"playpause",
-					glyphicon:"play",
+					glyphicon:"play small",
 					name:"toggle play pause",
 				});
 			break;
@@ -359,7 +359,7 @@ class PlayerCmd extends Player
 					{
 						buttons_opt.push({
 							id:"shuffle",
-							glyphicon:"random",
+							glyphicon:"random small",
 							name:"toggle shuffle",
 							click: "toggleshuffle(!$(this).hasClass(\'btn-primary\'));",
 						});
@@ -369,7 +369,7 @@ class PlayerCmd extends Player
 					{
 						buttons_opt.push({
 							id:"repeat",
-							glyphicon:"repeat",
+							glyphicon:"repeat small",
 							name:"toggle repeat",
 							click: "togglerepeat(!$(this).hasClass(\'btn-primary\'));",
 						});
@@ -380,12 +380,12 @@ class PlayerCmd extends Player
 			case "volume":
 				buttons_vol.push({
 						id:"volume-down",
-						glyphicon:"volume-down",
+						glyphicon:"volume-down small",
 						name:"volume down",
 					});
 				buttons_vol.push({
 						id:"volume-up",
-						glyphicon:"volume-up",
+						glyphicon:"volume-up small",
 						name:"volume up",
 					});
 			break;
@@ -447,7 +447,7 @@ class PlayerCmd extends Player
 		case "play":
 			var button = {
 				id:"playpause",
-				glyphicon: "glyphicon-pause",
+				glyphicon: "pause  small",
 				};
 			cmdbar.buttons.push(button);
 		break;
@@ -459,7 +459,7 @@ class PlayerCmd extends Player
 		default:
 			var button = {
 				id:"playpause",
-				glyphicon: "glyphicon-play",
+				glyphicon: "play  small",
 				};
 			cmdbar.buttons.push(button);
 		break;

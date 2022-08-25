@@ -1,5 +1,5 @@
 HTDOCS?=htdocs/
-CGI_BIN?=cgi-bin/apps/
+CGI_BIN?=cgi-bin/
 WEBSOCKET?=websocket/
 CERTDIR?=ssl/
 
@@ -7,7 +7,10 @@ data-y+=$(HTDOCS)apps/ouiradio.html
 data-y+=$(HTDOCS)apps/ouiradio.json
 data-y+=$(HTDOCS)apps/apps.json
 data-y+=$(HTDOCS)apps/js/player.js
-data-y+=$(CGI_BIN)totem-start.cgi
+data-y+=$(CGI_BIN)apps/totem-start.cgi
+
+data-$(DBMNG)+=$(HTDOCS)apps/musics.html
+data-$(DBMNG)+=$(CGI_BIN)apps/checkdb.cgi
 
 sysconf-y+=ouistiti.d/putv.conf
 sysconf-y+=radio.db

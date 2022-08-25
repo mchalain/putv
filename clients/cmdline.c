@@ -190,22 +190,6 @@ static const struct cmd_s cmds[] = {{
 	}
 };
 
-#ifdef USE_LIBINPUT
-static int open_restricted(const char *path, int flags, void *user_data)
-{
-        int fd = open(path, flags);
-        return fd < 0 ? -errno : fd;
-}
-static void close_restricted(int fd, void *user_data)
-{
-        close(fd);
-}
-const static struct libcmdline_interface interface = {
-        .open_restricted = open_restricted,
-        .close_restricted = close_restricted,
-};
-#endif
-
 int cmdline_checkstate(void *data, json_t *params)
 {
 	ctx_t *ctx = (ctx_t *)data;

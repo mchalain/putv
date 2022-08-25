@@ -1,3 +1,13 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+
+#include <neaacdec.h>
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -6,7 +16,7 @@
 #define dbg(...)
 #endif
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	int len = 1024;
 	char inbuffer[1024];
@@ -15,7 +25,7 @@ int main(void)
 	input = open(argv[1], O_RDONLY);
 	output = 1;
 	
-	len = read(inbuffer, buffer, len);
+	len = read(input, inbuffer, len);
 	int offset = NeAACDecInit(decoder, inbuffer,len, &samplerate, &channels);
 	dbg("decoder faad: samplerate %lu fps, channels %d", samplerate, channels);
 	memcpy(inbuffer, inbuffer + offset, len - offset);
@@ -36,9 +46,10 @@ int main(void)
 		write(output, samples, frameInfo.samples);
 		offset += frameInfo.bytesconsumed;
 		len -= frameInfo.bytesconsumed;
-		if (len < 1024
-		int tmp = read(input, inbuffer + offset, len
+//		if (len < 1024)
+//		int tmp = read(input, inbuffer + offset, len
 	} while(ret == 0);
 
 	close(input);
 	close(output);
+}

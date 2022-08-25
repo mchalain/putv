@@ -99,94 +99,126 @@ static int method_next(ctx_t *ctx, const char *arg);
 static int method_volume(ctx_t *ctx, const char *arg);
 static int method_repeat(ctx_t *ctx, const char *arg);
 static int method_shuffle(ctx_t *ctx, const char *arg);
+static int method_wait(ctx_t *ctx, const char *arg);
 static int method_quit(ctx_t *ctx, const char *arg);
 static int method_help(ctx_t *ctx, const char *arg);
 
 struct cmd_s {
 	const char shortkey;
 	const char *name;
+	const char *help;
 	method_t method;
 };
 static const struct cmd_s cmds[] = {{
 		.shortkey = 0,
 		.name = "append",
 		.method = method_append,
+		.help = "add an opus into the media\n" \
+			"        <json media> {\"sources\":[{\"url\":\"https://example.com/stream.mp3\"}],\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}",
 	},{
 		.shortkey = 0,
 		.name = "update",
 		.method = method_update,
+		.help = "",
 	},{
 		.shortkey = 0,
 		.name = "remove",
 		.method = method_remove,
+		.help = "",
 	},{
 		.shortkey = 0,
 		.name = "list",
 		.method = method_list,
+		.help = "display the opus from the media\n"\
+			"        <first opus id> <max number of opus>",
 	},{
 		.shortkey = 0,
 		.name = "filter",
 		.method = method_filter,
+		.help = "",
 	},{
 		.shortkey = 0,
 		.name = "media",
 		.method = method_media,
+		.help = "request to change the media\n" \
+			"        <media url>",
 	},{
 		.shortkey = 0,
 		.name = "export",
 		.method = method_export,
+		.help = "export the opus from the media into a json file\n" \
+			"        <file path>",
 	},{
 		.shortkey = 0,
 		.name = "import",
 		.method = method_import,
+		.help = "import opus from a json file into the media\n" \
+			"        <file path>",
 	},{
 		.shortkey = 0,
 		.name = "search",
 		.method = method_search,
+		.help = "",
 	},{
 		.shortkey = 0,
 		.name = "info",
 		.method = method_info,
+		.help = "display an opus from the media\n" \
+			"        <opus id>",
 	},{
 		.shortkey = 'p',
 		.name = "play",
 		.method = method_play,
+		.help = "start the stream\n" \
+			"        [media id]",
 	},{
 		.shortkey = 0,
 		.name = "pause",
 		.method = method_pause,
+		.help = "suspend the stream",
 	},{
 		.shortkey = 0,
 		.name = "stop",
 		.method = method_stop,
+		.help = "stop the stream",
 	},{
 		.shortkey = 'n',
 		.name = "next",
 		.method = method_next,
+		.help = "request the next opus",
 	},{
 		.shortkey = 0,
 		.name = "volume",
 		.method = method_volume,
+		.help = "request to change the level of volume\n" \
+			"        <0..100>",
 	},{
 		.shortkey = 0,
 		.name = "repeat",
 		.method = method_repeat,
+		.help = "change the repeat mode\n" \
+			"        <on|off>",
 	},{
 		.shortkey = 0,
 		.name = "shuffle",
 		.method = method_shuffle,
+		.help = "change the shuffle mode\n" \
+			"        <on|off>",
 	},{
 		.shortkey = 0,
 		.name = "quit",
 		.method = method_quit,
+		.help = "quit the command line application",
 	},{
 		.shortkey = 'h',
 		.name = "help",
 		.method = method_help,
+		.help = "display this help",
 	}, {
 		.shortkey = 0,
 		.name = NULL,
 		.method = NULL,
+		.help = NULL,
 	}
 };
 
@@ -509,30 +541,10 @@ static int method_quit(ctx_t *ctx, const char *arg)
 static int method_help(ctx_t *ctx, const char *arg)
 {
 	fprintf(stdout, "putv commands:\n");
-	fprintf(stdout, " play   : start the stream\n");
-	fprintf(stdout, "        [media id]\n");
-	fprintf(stdout, " stop   : stop the stream\n");
-	fprintf(stdout, " pause  : suspend the stream\n");
-	fprintf(stdout, " next   : request the next opus\n");
-	fprintf(stdout, " repeat : change the repeat mode\n");
-	fprintf(stdout, "        <on|off>\n");
-	fprintf(stdout, " shuffle: change the shuffle mode\n");
-	fprintf(stdout, "        <on|off>\n");
-	fprintf(stdout, " volume : request to change the level of volume on putv server\n");
-	fprintf(stdout, "        <0..100>\n");
-	fprintf(stdout, " media  : request to change the media\n");
-	fprintf(stdout, "        <media url>\n");
-	fprintf(stdout, " list   : display the opus from the media\n");
-	fprintf(stdout, "        <first opus id> <max number of opus>\n");
-	fprintf(stdout, " info   : display an opus from the media\n");
-	fprintf(stdout, "        <opus id>\n");
-	fprintf(stdout, " append : add an opus into the media\n");
-	fprintf(stdout, "        <json media> {\"sources\":[{\"url\":\"https://example.com/stream.mp3\"}],\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
-	fprintf(stdout, " import : import opus from a json file into the media\n");
-	fprintf(stdout, "        <file path>\n");
-	fprintf(stdout, " export : export the opus from the media into a json file\n");
-	fprintf(stdout, "        <file path>\n");
-	fprintf(stdout, " quit   : quit the command line application\n");
+	for (int i = 0; cmds[i].name != NULL; i++)
+	{
+		fprintf(stdout, " %s : %s\n", cmds[i].name, cmds[i].help);
+	}
 	return 0;
 }
 

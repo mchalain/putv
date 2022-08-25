@@ -74,7 +74,7 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-#define LATENCY 10
+#define LATENCY 0
 
 static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int rate, unsigned long *size)
 {

@@ -79,6 +79,8 @@ struct ctx_s
 		STATE_PAUSE,
 		STATE_STOP,
 	} state;
+	pthread_cond_t cond;
+	pthread_mutex_t mutex;
 };
 
 typedef int (*method_t)(ctx_t *ctx, const char *arg);
@@ -541,7 +543,6 @@ static int method_info(ctx_t *ctx, const char *arg)
 
 static int method_quit(ctx_t *ctx, const char *arg)
 {
-	client_disconnect(ctx->client);
 	ctx->run = 0;
 	return 0;
 }
@@ -586,6 +587,11 @@ int run_shell(ctx_t *ctx, int inputfd)
 		fd_set rfds;
 		struct timeval timeout = {1, 0};
 		struct timeval *ptimeout = NULL;
+
+		pthread_mutex_lock(&ctx->mutex);
+		while (ctx->client == NULL)
+			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		pthread_mutex_unlock(&ctx->mutex);
 
 		FD_ZERO(&rfds);
 		FD_SET(inputfd, &rfds);
@@ -659,6 +665,8 @@ int run_shell(ctx_t *ctx, int inputfd)
 				fprintf(stdout, " command not found\n");
 		}
 	}
+	sleep(1); // wait that the last request is treated otherwise the connection closing too fast
+	client_disconnect(ctx->client);
 	return 0;
 }
 
@@ -669,12 +677,15 @@ int run_client(void *arg)
 	client_data_t data = {0};
 	client_unix(ctx->socketpath, &data);
 	client_async(&data, 1);
+	pthread_mutex_lock(&ctx->mutex);
 	ctx->client = &data;
+	pthread_mutex_unlock(&ctx->mutex);
 
-	client_eventlistener(&data, "onchange", (client_event_prototype_t)printevent, ctx);
-	client_loop(&data);
+	client_eventlistener(ctx->client, "onchange", (client_event_prototype_t)printevent, ctx);
+	pthread_cond_broadcast(&ctx->cond);
+	client_loop(ctx->client);
 
-	client_disconnect(&data);
+	client_disconnect(ctx->client);
 	return 0;
 }
 
@@ -690,12 +701,13 @@ static void *_check_socket(void *arg)
 	inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(inotifyfd, ctx->root,
 					IN_MODIFY | IN_CREATE | IN_DELETE);
-	int run = 1;
-	while (run)
+	while (ctx->run)
 	{
 		if (!access(ctx->socketpath, R_OK | W_OK))
 		{
 			run_client((void *)ctx);
+			if (! ctx->run)
+				break;
 		}
 
 		char buffer[BUF_LEN];
@@ -705,7 +717,6 @@ static void *_check_socket(void *arg)
 		if (length < 0)
 		{
 			err("read");
-			run = 0;
 			continue;
 		}
 
@@ -751,7 +762,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:m:h");
+		opt = getopt(argc, argv, "R:n:m:i:h");
 		switch (opt)
 		{
 			case 'R':
@@ -796,6 +807,8 @@ int main(int argc, char **argv)
 	sprintf(data.socketpath, "%s/%s", data.root, data.name);
 
 	pthread_t thread;
+	pthread_cond_init(&data.cond, NULL);
+	pthread_mutex_init(&data.mutex, NULL);
 #ifdef USE_INOTIFY
 	pthread_create(&thread, NULL, (__start_routine_t)_check_socket, (void *)&data);
 #else
@@ -804,6 +817,9 @@ int main(int argc, char **argv)
 	run_shell(&data, inputfd);
 
 	pthread_join(thread, NULL);
+
+	pthread_cond_destroy(&data.cond);
+	pthread_mutex_destroy(&data.mutex);
 
 	free(data.socketpath);
 	json_decref(data.media);

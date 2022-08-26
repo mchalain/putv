@@ -390,6 +390,7 @@ static int media_next(media_ctx_t *ctx)
 		else
 			id = ctx->mediaid;
 
+		mediaid = id;
 		_find_mediaid_t data = {id + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
 	}

@@ -300,6 +300,52 @@ static int method_media(ctx_t *ctx, const char *arg)
 	int ret = -1;
 	json_error_t error;
 	json_t *media = json_loads(arg, 0, &error);
+	if (media == NULL && ctx->media != NULL)
+	{
+		char *end = NULL;
+		int index = strtol(arg, &end, 10);
+		if (arg != end)
+		{
+			if (index >= json_array_size(ctx->media))
+				index = 0;
+			media = json_array_get(ctx->media, index);
+			if (! json_is_object(media))
+				media = NULL;
+		}
+		else if (! strcmp(arg, "default"))
+		{
+			for (int i = 0; i < json_array_size(ctx->media); i++)
+			{
+				media = json_array_get(ctx->media, i);
+				json_t *jdefault = json_object_get(media, "default");
+				if (jdefault && json_boolean_value(jdefault))
+					break;
+				media = NULL;
+			}
+		}
+		else
+		{
+			for (int i = 0; i < json_array_size(ctx->media); i++)
+			{
+				media = json_array_get(ctx->media, i);
+				const char *name = NULL;
+				if (json_is_object(media))
+				{
+					json_t * jname = json_object_get(media, "name");
+					if (jname && json_is_string(jname))
+						name = json_string_value(jname);
+				}
+				if (name && ! strcmp(arg, name))
+					break;
+				media = NULL;
+			}
+		}
+	}
+	if (media == NULL)
+	{
+		media = json_object();
+		json_object_set_new(media, "media", json_string(arg));
+	}
 	ret = media_change(ctx->client, NULL, ctx, media);
 	return ret;
 }

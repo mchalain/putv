@@ -88,13 +88,13 @@ player_ctx_t *player_init(const char *filtername)
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now)
 {
 	media_t *media = media_build(ctx, mediapath);
+	if (media == NULL)
+	{
+		return -1;
+	}
 	if (media)
 	{
 		dbg("player: change media %s", media->ops->name);
-		if (media == NULL)
-		{
-			return -1;
-		}
 
 		pthread_mutex_lock(&ctx->mutex);
 		if (ctx->media)

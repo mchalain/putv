@@ -95,30 +95,6 @@ static void _autostart(union sigval arg)
 }
 #endif
 
-static int run_player(player_ctx_t *player, sink_t *sink)
-{
-	int ret;
-	const encoder_t *encoder;
-	encoder_ctx_t *encoder_ctx;
-	jitter_t *encoder_jitter = NULL;
-	jitter_t *sink_jitter;
-
-	encoder = sink->ops->encoder(sink->ctx);
-	encoder_ctx = encoder->init(player);
-	// retreive an index of jitter for this kind of encoder
-	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
-	sink_jitter = sink->ops->jitter(sink->ctx, index);
-	encoder->run(encoder_ctx, sink_jitter);
-	encoder_jitter = encoder->jitter(encoder_ctx);
-
-	if (encoder_jitter != NULL)
-		ret = player_subscribe(player, ES_AUDIO, encoder_jitter);
-	if (ret == 0)
-		ret = player_run(player);
-	encoder->destroy(encoder_ctx);
-	return ret;
-}
-
 void help(const char *name)
 {
 	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
@@ -396,42 +372,65 @@ int main(int argc, char **argv)
 	if (sink == NULL)
 	{
 		err("output not set");
-		pause();
+		goto end;
 	}
-	else
+
+	/**
+	 * the sink must to run before to start the encoder
+	 */
+	sink->ops->run(sink->ctx);
+	// encoder initialization
+	const encoder_t *encoder;
+	encoder = sink->ops->encoder(sink->ctx);
+	encoder_ctx_t *encoder_ctx;
+	encoder_ctx = encoder->init(player);
+	if (encoder_ctx == NULL)
 	{
-		/**
-		 * the sink must to run before to start the encoder
-		 */
-		sink->ops->run(sink->ctx);
-		player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 0);
+		err("encoder not found");
+		goto end;
+	}
+	// retreive an index of jitter for this kind of encoder
+	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
+	jitter_t *sink_jitter;
+	sink_jitter = sink->ops->jitter(sink->ctx, index);
 
-		if (mode & AUTOSTART)
-		{
-			dbg("autostart");
+	// start encoder
+	jitter_t *encoder_jitter = NULL;
+	encoder->run(encoder_ctx, sink_jitter);
+	encoder_jitter = encoder->jitter(encoder_ctx);
+
+	if (encoder_jitter != NULL)
+		player_subscribe(player, ES_AUDIO, encoder_jitter);
+
+	if (mode & AUTOSTART)
+	{
+		dbg("autostart");
 #ifdef USE_TIMER
-			if (player_mediaid(player) < 0)
-			{
-				int ret;
-				struct sigevent event;
-				event.sigev_notify = SIGEV_THREAD;
-				event.sigev_value.sival_ptr = player;
-				event.sigev_notify_function = _autostart;
-				event.sigev_notify_attributes = NULL;
-				ret = timer_create(CLOCK_REALTIME, &event, &timerid);
+		if (player_mediaid(player) < 0)
+		{
+			int ret;
+			struct sigevent event;
+			event.sigev_notify = SIGEV_THREAD;
+			event.sigev_value.sival_ptr = player;
+			event.sigev_notify_function = _autostart;
+			event.sigev_notify_attributes = NULL;
+			ret = timer_create(CLOCK_REALTIME, &event, &timerid);
 
-				struct itimerspec timer = {{0, 0}, {0, 100 * 1000}};
-				ret = timer_settime(timerid, 0, &timer,NULL);
-			}
-#endif
+			struct itimerspec timer = {{0, 0}, {0, 100 * 1000}};
+			ret = timer_settime(timerid, 0, &timer,NULL);
 		}
-
-		run_player(player, sink);
-
-		sink->ops->destroy(sink->ctx);
-		player_destroy(player);
+#endif
 	}
 
+	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 0);
+
+	ret = player_run(player);
+
+	encoder->destroy(encoder_ctx);
+	sink->ops->destroy(sink->ctx);
+	player_destroy(player);
+
+end:
 	for (i = 0; i < nbcmds; i++)
 	{
 		if (cmds[i].ctx != NULL)

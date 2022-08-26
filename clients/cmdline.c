@@ -103,6 +103,7 @@ static int method_volume(ctx_t *ctx, const char *arg);
 static int method_repeat(ctx_t *ctx, const char *arg);
 static int method_shuffle(ctx_t *ctx, const char *arg);
 static int method_wait(ctx_t *ctx, const char *arg);
+static int method_sleep(ctx_t *ctx, const char *arg);
 static int method_quit(ctx_t *ctx, const char *arg);
 static int method_help(ctx_t *ctx, const char *arg);
 
@@ -211,7 +212,12 @@ static const struct cmd_s cmds[] = {{
 		.shortkey = 0,
 		.name = "wait",
 		.method = method_wait,
-		.help = "ait a number of media changing\n        <0..100>",
+		.help = "wait a number of media changing\n        <0..100>",
+	},{
+		.shortkey = 0,
+		.name = "sleep",
+		.method = method_sleep,
+		.help = "wait a number of seconds\n        <0..100>",
 	},{
 		.shortkey = 0,
 		.name = "quit",
@@ -551,6 +557,13 @@ static int method_wait(ctx_t *ctx, const char *arg)
 {
 	int nb = atoi(arg);
 	media_wait(ctx->client,nb);
+	return 0;
+}
+
+static int method_sleep(ctx_t *ctx, const char *arg)
+{
+	int seconds = atoi(arg);
+	sleep(seconds);
 	return 0;
 }
 

@@ -289,13 +289,17 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
+	const char *mime = NULL;
 	if (url)
+	{
+		mime = utils_getmime(url);
+	}
+	if (mime != mime_octetstream)
 	{
 		ctx = calloc(1, sizeof(*ctx));
 #ifdef MEDIA_FILE_LIST
-		media_insert(ctx, url, NULL, utils_getmime(url));
+		media_insert(ctx, url, NULL, mime);
 #else
-		const char *mime = utils_getmime(url);
 		media_url_t *media;
 		media = calloc(1, sizeof(*media));
 		media->url = strdup(url);

@@ -1310,7 +1310,7 @@ static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
 	unixserver_remove(info);
 }
 
-static ssize_t _cmds_recv(void *buff, size_t size, void *userctx)
+static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
@@ -1322,8 +1322,7 @@ static ssize_t _cmds_recv(void *buff, size_t size, void *userctx)
 	if (ret <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
-		_cmds_json_removeinfo(ctx, info);
-		return ret;
+		return (size_t)ret;
 	}
 
 	ssize_t length = strlen(((char *)buff)) + 1;

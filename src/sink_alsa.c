@@ -328,9 +328,9 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	const char *soundcard;
 	char *setting;
 
-	soundcard = utils_getpath(url, "alsa://", &setting);
+	soundcard = utils_getpath(url, "alsa://", &setting, 1);
 	if (soundcard == NULL)
-		soundcard = utils_getpath(url, "pcm://", &setting);
+		soundcard = utils_getpath(url, "pcm://", &setting, 1);
 	if (soundcard == NULL)
 	{
 		soundcard = url;

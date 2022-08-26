@@ -28,7 +28,7 @@ extern const char const *str_likes;
 
 void utils_srandom();
 const char *utils_getmime(const char *path);
-char *utils_getpath(const char *url, const char *proto, char **query);
+char *utils_getpath(const char *url, const char *proto, char **query, int strict);
 char *utils_parseurl(const char *url,
 								char **protocol,
 								char **host,

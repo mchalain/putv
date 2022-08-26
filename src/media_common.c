@@ -116,13 +116,13 @@ const char *utils_getmime(const char *path)
 	return mime_octetstream;
 }
 
-char *utils_getpath(const char *url, const char *proto, char **query)
+char *utils_getpath(const char *url, const char *proto, char **query, int strict)
 {
 	char *newpath = NULL;
 	const char *path = strstr(url, proto);
 	if (path == NULL)
 	{
-		if (strstr(url, "://"))
+		if (strict || strstr(url, "://") != NULL)
 		{
 			return NULL;
 		}

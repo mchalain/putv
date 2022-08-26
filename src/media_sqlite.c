@@ -1802,7 +1802,7 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 	/**
 	 * store path to keep query all the time
 	 */
-	ctx->path = utils_getpath(url, "db://", &ctx->query);
+	ctx->path = utils_getpath(url, "db://", &ctx->query, 1);
 
 	if (ctx->path == NULL)
 		return -1;

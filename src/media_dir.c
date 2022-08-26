@@ -533,7 +533,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		int ret;
 		struct stat pathstat;
 		char *query = NULL;
-		char *path = utils_getpath(url, "file://", &query);
+		char *path = utils_getpath(url, "file://", &query, 0);
 		if (path == NULL)
 		{
 			err("media dir: error on path %s", url);

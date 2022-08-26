@@ -113,16 +113,18 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		{
 			media->ops->random(media->ctx, OPTION_ENABLE);
 		}
-		// try to start id = 0 or id = 1
-		/// db media store src id from 1 and not 0
-		int ret = player_play(ctx, 0);
-		if (ret < 0)
-			ret = player_play(ctx, 1);
-		if (now && ret >= 0)
+		if (now)
 		{
-			dbg("player: start new media");
-			int id = player_next(ctx, 1);
+			// try to start id = 0 or id = 1
+			/// db media store src id from 1 and not 0
+			int ret = player_play(ctx, 0);
+			if (ret < 0)
+				player_play(ctx, 1);
+			err("player: start new media %d", ret);
+			player_state(ctx, STATE_CHANGE);
 		}
+		else
+			player_state(ctx, STATE_STOP);
 	}
 	return 0;
 }
@@ -222,6 +224,7 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond_int);
+		sched_yield();
 	}
 	return ctx->state;
 }
@@ -349,7 +352,8 @@ int player_play(player_ctx_t *ctx, int id)
 	if (ctx->media && ctx->media->ops->play != NULL)
 	{
 		ret = ctx->media->ops->play(ctx->media->ctx, id, _player_play, ctx);
-		ret -= 1;
+		// TO CHECK
+		//ret -= 1;
 	}
 	return ret;
 }

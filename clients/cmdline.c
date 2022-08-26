@@ -228,6 +228,8 @@ static const struct cmd_s cmds[] = {{
 	}
 };
 
+FILE *termout = NULL;
+
 int cmdline_checkstate(void *data, json_t *params)
 {
 	ctx_t *ctx = (ctx_t *)data;
@@ -369,16 +371,16 @@ static int display_info(ctx_t *ctx, json_t *info)
 			const char *string = json_string_value(value);
 			if (string != NULL)
 			{
-				fprintf(stdout, "  %s: %s\n", key, string);
+				fprintf(termout, "  %s: %s\n", key, string);
 			}
 		}
 		if (json_is_integer(value))
 		{
-			fprintf(stdout, "  %s: %lld\n", key, json_integer_value(value));
+			fprintf(termout, "  %s: %lld\n", key, json_integer_value(value));
 		}
 		if (json_is_null(value))
 		{
-			fprintf(stdout, "  %s: empty\n", key);
+			fprintf(termout, "  %s: empty\n", key);
 		}
 	}
 
@@ -389,7 +391,7 @@ static int display_media(ctx_t *ctx, json_t *media)
 {
 	json_t *info = json_object_get(media, "info");
 	int id = json_integer_value(json_object_get(media, "id"));
-	fprintf(stdout, "media: %d\n", id);
+	fprintf(termout, "media: %d\n", id);
 	display_info(ctx, info);
 	return 0;
 }
@@ -400,7 +402,7 @@ static int display_list(ctx_t *ctx, json_t *params)
 	json_t *value;
 	int count = json_integer_value(json_object_get(params, "count"));
 	int nbitems = json_integer_value(json_object_get(params, "nbitems"));
-	fprintf(stdout, "nb media: %d\n", count);
+	fprintf(termout, "nb media: %d\n", count);
 	json_t *playlist = json_object_get(params, "playlist");
 	int i;
 	json_t *media;
@@ -421,7 +423,7 @@ static int method_list(ctx_t *ctx, const char *arg)
 	if (ret >= 0)
 		ret = media_list(ctx->client, (client_event_prototype_t)display_list, ctx, first, max);
 	else
-		fprintf(stdout, "error on parameter %s\n", strerror(errno));
+		fprintf(stderr, "error on parameter %s\n", strerror(errno));
 	return ret;
 }
 
@@ -478,7 +480,7 @@ static int method_export(ctx_t *ctx, const char *arg)
 	data.outfile = fopen(arg, "w");
 	if (data.outfile == NULL)
 	{
-		fprintf(stdout, "error on file %s\n", strerror(errno));
+		fprintf(stderr, "error on file %s\n", strerror(errno));
 		return -1;
 	}
 	fprintf(data.outfile, "[");
@@ -553,10 +555,10 @@ static int method_wait(ctx_t *ctx, const char *arg)
 
 static int method_help(ctx_t *ctx, const char *arg)
 {
-	fprintf(stdout, "putv commands:\n");
+	fprintf(stderr, "putv commands:\n");
 	for (int i = 0; cmds[i].name != NULL; i++)
 	{
-		fprintf(stdout, " %s : %s\n", cmds[i].name, cmds[i].help);
+		fprintf(stderr, " %s : %s\n", cmds[i].name, cmds[i].help);
 	}
 	return 0;
 }
@@ -568,16 +570,15 @@ int printevent(ctx_t *ctx, json_t *json_params)
 	json_t *info = json_object();
 
 	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
-	fprintf(stdout, "\n%s\n", state);
+	fprintf(termout, "\n%s\n", state);
 	display_info(ctx, info);
-	fprintf(stdout, "> ");
-	fflush(stdout);
+	fprintf(termout, "> ");
+	fflush(termout);
 	return 0;
 }
 
-int run_shell(ctx_t *ctx)
+int run_shell(ctx_t *ctx, int inputfd)
 {
-	int fd = 0;
 	ctx->run = 1;
 	while (ctx->run)
 	{
@@ -587,23 +588,23 @@ int run_shell(ctx_t *ctx)
 		struct timeval *ptimeout = NULL;
 
 		FD_ZERO(&rfds);
-		FD_SET(fd, &rfds);
-		int maxfd = fd;
-		fprintf (stdout, "> ");
-		fflush(stdout);
+		FD_SET(inputfd, &rfds);
+		int maxfd = inputfd;
+		fprintf (termout, "> ");
+		fflush(termout);
 		ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
 		char buffer[1024];
-		if (ret > 0 && FD_ISSET(fd, &rfds))
+		if (ret > 0 && FD_ISSET(inputfd, &rfds))
 		{
 			int length;
 			int start;
-			ret = ioctl(fd, FIONREAD, &length);
+			ret = ioctl(inputfd, FIONREAD, &length);
 			if (length > sizeof(buffer))
 			{
 				err("string too long");
 				continue;
 			}
-			ret = read(fd, buffer, length);
+			ret = read(inputfd, buffer, length);
 			if (ret <= 0)
 			{
 				ctx->run = 0;
@@ -744,6 +745,8 @@ int main(int argc, char **argv)
 		.name = "putv",
 	};
 	const char *media_path;
+	int inputfd = 0;
+	termout = stdout;
 
 	int opt;
 	do
@@ -760,12 +763,17 @@ int main(int argc, char **argv)
 			case 'm':
 				media_path = optarg;
 			break;
+			case 'i':
+				inputfd = open(optarg, O_RDONLY);
+				termout = fopen("/dev/null", "w");
+			break;
 			case 'h':
 				fprintf(stderr, "cmdline -R <dir> -n <socketname> [-m <jsonfile>]");
 				fprintf(stderr, "cmdline for putv applications\n");
 				fprintf(stderr, " -R <DIR>   change the socket directory directory");
 				fprintf(stderr, " -n <NAME>  change the socket name");
-				fprintf(stderr, " -m <FILE>  load Json file to mqnqge media");
+				fprintf(stderr, " -m <FILE>  load Json file to manage media");
+				fprintf(stderr, " -i <FILE>  set filepath to read command (default: stdin)");
 				return -1;
 			break;
 		}
@@ -793,7 +801,7 @@ int main(int argc, char **argv)
 #else
 	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
-	run_shell(&data);
+	run_shell(&data, inputfd);
 
 	pthread_join(thread, NULL);
 

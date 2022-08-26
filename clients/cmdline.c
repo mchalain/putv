@@ -594,6 +594,7 @@ int printevent(ctx_t *ctx, json_t *json_params)
 int run_shell(ctx_t *ctx, int inputfd)
 {
 	ctx->run = 1;
+	char history[1024] = {0};
 	while (ctx->run)
 	{
 		int ret;
@@ -618,7 +619,7 @@ int run_shell(ctx_t *ctx, int inputfd)
 			int length;
 			int start;
 			ret = ioctl(inputfd, FIONREAD, &length);
-			if (length > sizeof(buffer))
+			if (length >= sizeof(buffer))
 			{
 				err("string too long");
 				continue;
@@ -629,6 +630,8 @@ int run_shell(ctx_t *ctx, int inputfd)
 				ctx->run = 0;
 				continue;
 			}
+			if (ret == 1)
+				strcpy(buffer, history);
 			method_t method = NULL;
 			for (int i = 0; cmds[i].name != NULL; i++)
 			{
@@ -673,6 +676,8 @@ int run_shell(ctx_t *ctx, int inputfd)
 				ret = method(ctx, arg);
 				if (ret < 0)
 					ctx->run = 0;
+				else
+					strcpy(history, buffer);
 			}
 			else
 				fprintf(stdout, " command not found\n");

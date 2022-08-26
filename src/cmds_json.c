@@ -1306,8 +1306,7 @@ static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
 		if (it != NULL)
 			it->next = info->next;
 	}
-
-	unixserver_remove(info);
+	info->sock = -1;
 }
 
 static size_t _cmds_recv(void *buff, size_t size, void *userctx)
@@ -1318,10 +1317,13 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 
 	ssize_t ret = recv(sock,
 		buff, size, MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
-	dbg("cmds: receive message %d", ret);
+	dbg("cmds: receive message %ld", ret);
 	if (ret <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
+		pthread_mutex_lock(&ctx->mutex);
+		_cmds_json_removeinfo(ctx, info);
+		pthread_mutex_unlock(&ctx->mutex);
 		return (size_t)ret;
 	}
 
@@ -1589,6 +1591,8 @@ static int jsonrpc_command(thread_info_t *info)
 	warn("cmds: json socket %d leave", info->sock);
 	_cmds_json_removeinfo(ctx, info);
 	pthread_mutex_unlock(&ctx->mutex);
+	unixserver_remove(info);
+
 	return ret;
 }
 

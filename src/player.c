@@ -141,6 +141,17 @@ int player_next(player_ctx_t *ctx, int change)
 	if (ctx->media != NULL && change)
 	{
 		/**
+		 * This allows to start the player with next command
+		 */
+		if (ctx->state == STATE_STOP)
+		{
+			// try to start id = 0 or id = 1
+			/// db media store src id from 1 and not 0
+			int ret = player_play(ctx, 0);
+			if (ret < 0)
+				player_play(ctx, 1);
+		}
+		/**
 		 * next command just request the main loop to complete
 		 * the current entry to jump to the next one.
 		 * The main loop will set the next one long time before

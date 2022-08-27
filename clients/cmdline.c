@@ -181,7 +181,7 @@ static const struct cmd_s cmds[] = {{
 		.method = method_pause,
 		.help = "suspend the stream",
 	},{
-		.shortkey = 0,
+		.shortkey = 's',
 		.name = "stop",
 		.method = method_stop,
 		.help = "stop the stream",
@@ -219,7 +219,7 @@ static const struct cmd_s cmds[] = {{
 		.method = method_sleep,
 		.help = "wait a number of seconds\n        <0..100>",
 	},{
-		.shortkey = 0,
+		.shortkey = 'q',
 		.name = "quit",
 		.method = method_quit,
 		.help = "quit the command line application",

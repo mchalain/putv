@@ -113,18 +113,22 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		{
 			media->ops->random(media->ctx, OPTION_ENABLE);
 		}
-		if (now)
+		/**
+		 * If stoped the next opus is ready with the new media
+		 * Otherwise the next opsu comes from the previous media
+		 */
+		if (ctx->state != STATE_STOP)
 		{
 			// try to start id = 0 or id = 1
 			/// db media store src id from 1 and not 0
 			int ret = player_play(ctx, 0);
 			if (ret < 0)
 				player_play(ctx, 1);
-			err("player: start new media %d", ret);
+		}
+		if (now)
+		{
 			player_state(ctx, STATE_CHANGE);
 		}
-		else
-			player_state(ctx, STATE_STOP);
 	}
 	return 0;
 }

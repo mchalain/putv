@@ -359,7 +359,7 @@ static int _src_run(src_ctx_t *ctx)
 		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 		int divider = ctx->samplesize * ctx->nchannels;
 		ctx->periodsize = (ctx->out->ctx->size / divider) * 5;
-		dbg("src: latency %dms", (ctx->periodsize * 1000) / ctx->samplerate);
+		dbg("src: latency %lums", (ctx->periodsize * 1000) / ctx->samplerate);
 		_pcm_open(ctx, ctx->format, ctx->samplerate, &ctx->periodsize);
 	}
 	pthread_create(&ctx->thread, NULL, _src_thread, ctx);

@@ -272,7 +272,7 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 {
 	if (data->pid > 0)
 	{
-		warn("client: request %d waiting", data->pid);
+		warn("client: request %lu waiting", data->pid);
 		return -2;
 	}
 	pthread_mutex_lock(&data->mutex);

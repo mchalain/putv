@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -637,10 +638,68 @@ int printevent(ctx_t *ctx, json_t *json_params)
 	return 0;
 }
 
+int parse_cmd(ctx_t *ctx, char *buffer)
+{
+	static char history[1024] = {0};
+	int ret;
+	int length;
+	int start;
+
+	char *end = NULL;
+	end = strchrnul(buffer, '\n');
+	if (end != NULL)
+		*end = '\0';
+
+	if (end == buffer)
+		strcpy(buffer, history);
+	method_t method = NULL;
+	for (int i = 0; cmds[i].name != NULL; i++)
+	{
+		start = strlen(cmds[i].name);
+		if (!strncmp(buffer, cmds[i].name, start))
+		{
+			method = cmds[i].method;
+			break;
+		}
+	}
+	for (int i = 0; cmds[i].name != NULL; i++)
+	{
+		if ( cmds[i].shortkey == 0)
+			continue;
+		if (buffer[0] == cmds[i].shortkey && &buffer[1] == end)
+		{
+			method = cmds[i].method;
+			start = 1;
+			break;
+		}
+	}
+	const char *arg = NULL;
+	for (int i = start; &buffer[i] < end; i++)
+	{
+		if (buffer[i] == ' ' || buffer[i] == '\t')
+			continue;
+		if (method != NULL)
+		{
+			arg = &buffer[i];
+			break;
+		}
+	}
+	if (method)
+	{
+		ret = method(ctx, arg);
+		if (ret < 0)
+			ctx->run = 0;
+		else
+			strcpy(history, buffer);
+	}
+	else
+		fprintf(stdout, " command not found\n");
+	return end - buffer + 1;
+}
+
 int run_shell(ctx_t *ctx, int inputfd)
 {
 	ctx->run = 1;
-	char history[1024] = {0};
 	while (ctx->run)
 	{
 		int ret;
@@ -663,70 +722,25 @@ int run_shell(ctx_t *ctx, int inputfd)
 		if (ret > 0 && FD_ISSET(inputfd, &rfds))
 		{
 			int length;
-			int start;
 			ret = ioctl(inputfd, FIONREAD, &length);
 			if (length >= sizeof(buffer))
 			{
 				err("string too long");
 				continue;
 			}
-			ret = read(inputfd, buffer, length);
-			if (ret <= 0)
+			length = read(inputfd, buffer, length);
+			if (length <= 0)
 			{
 				ctx->run = 0;
 				continue;
 			}
-			if (ret == 1)
-				strcpy(buffer, history);
-			method_t method = NULL;
-			for (int i = 0; cmds[i].name != NULL; i++)
+			char *offset = buffer;
+			while (length > 0)
 			{
-				start = strlen(cmds[i].name);
-				if (!strncmp(buffer, cmds[i].name, start))
-				{
-					method = cmds[i].method;
-					break;
-				}
+				ret = parse_cmd(ctx, offset);
+				offset += ret;
+				length -= ret;
 			}
-			for (int i = 0; cmds[i].name != NULL; i++)
-			{
-				if ( cmds[i].shortkey == 0)
-					continue;
-				if (buffer[0] == cmds[i].shortkey && buffer[1] == '\n')
-				{
-					method = cmds[i].method;
-					start = 1;
-					break;
-				}
-			}
-			const char *arg = NULL;
-			for (int i  = start; i < length; i++)
-			{
-				if (buffer[i] == ' ' || buffer[i] == '\t')
-					continue;
-				if (buffer[i] == '\n')
-					break;
-				if (method != NULL)
-				{
-					arg = buffer + i;
-					break;
-				}
-			}
-			if (method)
-			{
-				char *end = NULL;
-				if (arg)
-					end = strchr(arg, '\n');
-				if (end != NULL)
-					*end = '\0';
-				ret = method(ctx, arg);
-				if (ret < 0)
-					ctx->run = 0;
-				else
-					strcpy(history, buffer);
-			}
-			else
-				fprintf(stdout, " command not found\n");
 		}
 	}
 	sleep(1); // wait that the last request is treated otherwise the connection closing too fast

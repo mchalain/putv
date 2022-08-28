@@ -40,10 +40,12 @@ typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
-	int fd;
 	player_ctx_t *player;
 	jitter_t *in;
+	event_listener_t *listener;
+
 	const encoder_t *encoder;
+	int fd;
 };
 #define SINK_CTX
 #include "sink.h"

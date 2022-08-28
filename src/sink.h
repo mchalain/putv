@@ -20,6 +20,7 @@ struct sink_ops_s
 	void (*destroy)(sink_ctx_t *);
 	const char *(*service)(sink_ctx_t *, int *port, const char **txt[]);
 	const encoder_t *(*encoder)(sink_ctx_t *);
+	void (*eventlistener)(sink_ctx_t *ctx, event_listener_cb_t listener, void *arg);
 
 	/**
 	 * control API
@@ -36,4 +37,5 @@ struct sink_s
 };
 
 sink_t *sink_build(player_ctx_t *, const char *arg);
+
 #endif

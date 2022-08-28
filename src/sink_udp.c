@@ -55,10 +55,12 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
+	jitter_t *in;
+	event_listener_t *listener;
+
 	const char *filepath;
 	struct sockaddr_in saddr;
 	pthread_t thread;
-	jitter_t *in;
 	state_t state;
 	unsigned int samplerate;
 	int samplesize;

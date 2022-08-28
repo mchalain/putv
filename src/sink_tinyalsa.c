@@ -39,12 +39,15 @@ typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
-	const sink_t *ops;
 	player_ctx_t *player;
+	jitter_t *in;
+	event_listener_t *listener;
+
+	const sink_t *ops;
 	struct pcm *playback_handle;
 	pthread_t thread;
-	jitter_t *in;
 	state_t state;
+
 };
 #define SINK_CTX
 #include "sink.h"

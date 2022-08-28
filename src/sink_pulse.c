@@ -42,10 +42,12 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
+	jitter_t *in;
+	event_listener_t *listener;
+
 	pa_simple *playback_handle;
 
 	pthread_t thread;
-	jitter_t *in;
 	state_t state;
 	jitter_format_t format;
 	unsigned int samplerate;

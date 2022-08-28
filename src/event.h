@@ -5,6 +5,7 @@
 #include "jitter.h"
 
 typedef struct src_s src_t;
+typedef struct sink_s sink_t;
 typedef struct decoder_s decoder_t;
 typedef struct player_ctx_s player_ctx_t;
 
@@ -15,6 +16,7 @@ typedef enum event_e
 	SRC_EVENT_END_ES,
 	PLAYER_EVENT_CHANGE = 10,
 	PLAYER_EVENT_POSITION,
+	SINK_EVENT_VOLUME = 20,
 } event_t;
 typedef struct event_new_es_s event_new_es_t;
 struct event_new_es_s
@@ -33,6 +35,12 @@ struct event_decode_es_s
 	uint32_t pid;
 	const src_t *src;
 	decoder_t *decoder;
+};
+
+typedef struct event_sink_volume_s event_sink_volume_t;
+struct event_sink_volume_s
+{
+	sink_t *sink;
 };
 
 typedef struct event_player_state_s event_player_state_t;

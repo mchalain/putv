@@ -49,10 +49,12 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
+	jitter_t *in;
+	event_listener_t *listener;
+
 	const char *filepath;
 	pthread_t thread;
 	pthread_t thread2;
-	jitter_t *in;
 	state_t state;
 #ifdef SINK_UNIX_ASYNC
 	char *out;

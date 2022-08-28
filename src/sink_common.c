@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "event.h"
 #include "sink.h"
 #include "media.h"
 
@@ -81,4 +82,3 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	free(url);
 	return &_sink;
 }
-

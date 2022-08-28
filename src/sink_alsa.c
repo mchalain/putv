@@ -42,6 +42,9 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
+	jitter_t *in;
+	event_listener_t *listener;
+
 	const char *soundcard;
 	snd_pcm_t *playback_handle;
 	char *mixerch;
@@ -49,7 +52,6 @@ struct sink_ctx_s
 	snd_mixer_elem_t* mixerchannel;
 
 	pthread_t thread;
-	jitter_t *in;
 	state_t state;
 	jitter_format_t format;
 	unsigned int samplerate;
@@ -104,6 +106,14 @@ void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 		volume == 100;
 	long lvolume = volume * (max - min) / 100 + min;
 	snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, lvolume);
+	event_listener_t *listener = ctx->listener;
+	sink_t sink = {.ctx = ctx, .ops = sink_alsa};
+	event_sink_volume_t event = {.sink = &sink};
+	while (listener)
+	{
+		listener->cb(listener->arg, SINK_EVENT_VOLUME, (void *)&event);
+		listener = listener->next;
+	}
 }
 
 unsigned int _mixer_getvolume(sink_ctx_t *ctx)
@@ -638,6 +648,26 @@ static int alsa_run(sink_ctx_t *ctx)
 	return ret;
 }
 
+static void sink_eventlistener(sink_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+{
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
+}
+
 static void alsa_destroy(sink_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -663,6 +693,7 @@ const sink_ops_t *sink_alsa = &(sink_ops_t)
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,
+	.eventlistener = sink_eventlistener,
 	.encoder = sink_encoder,
 	.run = alsa_run,
 	.destroy = alsa_destroy,

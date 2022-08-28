@@ -784,9 +784,8 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 
-	dbg("cmds: media %p", media);
 	*result = json_object();
-	if (media != NULL)
+	if (media != NULL && (ctx->onchangemask & ONCHANGE_SOURCE))
 	{
 		_display_ctx_t display = {
 			.ctx = ctx,
@@ -813,6 +812,8 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 			json_array_append(options, json_string("random"));
 		}
 		json_object_set(*result, "options", options);
+		ctx->onchangemask &= ~ONCHANGE_SOURCE;
+		ctx->onchangemask &= ~ONCHANGE_MEDIA;
 	}
 
 	json_t *json_state;
@@ -832,11 +833,11 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	json_object_set(*result, "state", json_state);
 
-	if (ctx->sink && ctx->sink->ops->getvolume != NULL && (ctx->onchangemask &ONCHANGE_VOLUME))
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL && (ctx->onchangemask & ONCHANGE_VOLUME))
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
-		ctx->onchangemask |= ~ONCHANGE_VOLUME;
+		ctx->onchangemask &= ~ONCHANGE_VOLUME;
 	}
 	return 0;
 }
@@ -934,7 +935,6 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 			if (volume < 0)
 				volume = 0;
 			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
-			ctx->onchangemask &= ONCHANGE_VOLUME;
 		}
 		value = json_object_get(json_params, "step");
 		if (value && json_is_integer(value))
@@ -950,7 +950,6 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 			if (volume < 0)
 				volume = 0;
 			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
-			ctx->onchangemask &= ONCHANGE_VOLUME;
 		}
 	}
 	*result = json_object();
@@ -1348,6 +1347,17 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 	{
 		case PLAYER_EVENT_CHANGE:
 			pthread_mutex_lock(&ctx->mutex);
+			event_player_state_t *eventval = (event_player_state_t *)eventarg;
+			if (eventval->state != STATE_CHANGE)
+				ctx->eventsmask |= ONCHANGE;
+			else
+				ctx->onchangemask |= ONCHANGE_SOURCE;
+			pthread_mutex_unlock(&ctx->mutex);
+			pthread_cond_broadcast(&ctx->cond);
+		break;
+		case SINK_EVENT_VOLUME:
+			pthread_mutex_lock(&ctx->mutex);
+			ctx->onchangemask |= ONCHANGE_VOLUME;
 			ctx->eventsmask |= ONCHANGE;
 			pthread_mutex_unlock(&ctx->mutex);
 			pthread_cond_broadcast(&ctx->cond);
@@ -1432,6 +1442,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 			cmds_dbg("cmds: send new message");
 		}
+		pthread_mutex_unlock(&ctx->mutex);
 		while (ctx->requests != NULL)
 		{
 			cmds_dbg("cmds: send response");
@@ -1500,7 +1511,6 @@ static void *_cmds_json_pthreadsend(void *arg)
 				ctx->eventsmask &= ~ONCHANGE;
 			}
 		}
-		pthread_mutex_unlock(&ctx->mutex);
 	}
 	warn("cmds: leave thread send");
 	return NULL;
@@ -1605,7 +1615,7 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_mutex_init(&ctx->mutex, NULL);
 	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
-	ctx->onchangemask = -1;
+	ctx->onchangemask = 0;
 	return ctx;
 }
 
@@ -1621,6 +1631,9 @@ static void *_cmds_json_pthreadrecv(void *arg)
 static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	ctx->sink = sink;
+	if (sink->ops->eventlistener)
+		sink->ops->eventlistener(sink->ctx, jsonrpc_onchange, (void *)ctx);
+
 	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
 	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;

@@ -50,6 +50,7 @@
 #endif
 
 #include "client_json.h"
+#include "daemonize.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -826,6 +827,8 @@ static void *_check_socket(void *arg)
 }
 #endif
 
+#define DAEMONIZE 0x01
+#define KILLDAEMON 0x02
 int main(int argc, char **argv)
 {
 	int mode = 0;
@@ -834,13 +837,14 @@ int main(int argc, char **argv)
 		.name = "putv",
 	};
 	const char *media_path;
+	const char *pidfile = NULL;
 	int inputfd = 0;
 	termout = stdout;
 
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:m:i:h");
+		opt = getopt(argc, argv, "R:n:m:DKp:i:h");
 		switch (opt)
 		{
 			case 'R':
@@ -851,6 +855,15 @@ int main(int argc, char **argv)
 			break;
 			case 'm':
 				media_path = optarg;
+			break;
+			case 'D':
+				mode |= DAEMONIZE;
+			break;
+			case 'K':
+				mode |= KILLDAEMON;
+			break;
+			case 'p':
+				pidfile = optarg;
 			break;
 			case 'i':
 				inputfd = open(optarg, O_RDONLY);
@@ -867,6 +880,15 @@ int main(int argc, char **argv)
 			break;
 		}
 	} while(opt != -1);
+
+	if (mode & KILLDAEMON)
+	{
+		killdaemon(pidfile);
+	}
+	if ((inputfd != 0) && (mode & DAEMONIZE) && daemonize(pidfile) == -1)
+	{
+		return 0;
+	}
 
 	json_error_t error;
 	json_t *media;

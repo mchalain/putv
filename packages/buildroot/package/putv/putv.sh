@@ -27,8 +27,8 @@ prepare() {
 }
 
 start() {
-	OPTIONS="${OPTIONS} -m ${MEDIA}"
-	OPTIONS="${OPTIONS} -a -l -r"
+#	OPTIONS="${OPTIONS} -m ${MEDIA}"
+#	OPTIONS="${OPTIONS} -a -l -r"
 # 	OPTIONS="${OPTIONS} -a -r"
 	OPTIONS="${OPTIONS} -R ${WEBSOCKETDIR}"
 #	OPTIONS="${OPTIONS} -u ${USER}"

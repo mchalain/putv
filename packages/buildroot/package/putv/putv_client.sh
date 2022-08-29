@@ -9,16 +9,21 @@ WEBSOCKETDIR="/var/run/websocket"
 USER="www-data"
 CDISPLAY=${BINDIR}/putv_display
 CINPUT=${BINDIR}/putv_input
+CCMDLINE=${BINDIR}/putv_cmdline
+CCMDLINE_SCRIPT=/etc/default/putv.cmdline
 
 OPTIONS=""
 [ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
 
-OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON}"
-OPTIONS_CINPUT="${OPTIONS_CINPUT} -i ${CINPUT_DEVICE} -m ${CINPUT_JSON}"
+OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON} -m ${CINPUT_JSON}"
+OPTIONS_CINPUT="${OPTIONS_CINPUT} -i ${CINPUT_DEVICE}"
 
 start() {
   chmod a+rwx ${WEBSOCKETDIR}
   #${CDISPLAY} -D ${OPTIONS_CLIENTS} -p ${PIDDIR}putv_display.pid
+  if [ -e ${CCMDLINE_SCRIPT} ]; then
+    ${CCMDLINE} ${OPTIONS_CLIENTS} -p ${PIDDIR}putv_cmdline.pid -i ${CCMDLINE_SCRIPT}
+  fi
   if [ -c ${CINPUT_DEVICE} ]; then
     ${CINPUT} -D ${OPTIONS_CLIENTS} -p ${PIDDIR}putv_input.pid ${OPTIONS_CINPUT}
   fi
@@ -30,6 +35,9 @@ stop() {
   fi
   if [ -e ${PIDDIR}putv_input.pid ]; then
 	kill -9 $(cat ${PIDDIR}putv_input.pid )
+  fi
+  if [ -e ${PIDDIR}putv_cmdline.pid ]; then
+	kill -9 $(cat ${PIDDIR}putv_cmdline.pid )
   fi
 }
 

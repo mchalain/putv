@@ -477,19 +477,23 @@ int main(int argc, char **argv)
 	if (nbinputs == 0)
 		data.inputfd[nbinputs++] = open("/dev/input/event0", O_RDONLY);
 	json_error_t error;
-	json_t *media;
-	media = json_load_file(media_path, 0, &error);
-	if (json_is_object(media))
+	if (media_path)
 	{
-		media = json_object_get(media, "media");
+		json_t *media = NULL;
+		media = json_load_file(media_path, 0, &error);
+		if (media && json_is_object(media))
+		{
+			data.media = json_object_get(media, "media");
+		}
+		else
+			err("media error: %d,%d %s", error.line, error.column, error.text);
 	}
-	if (! json_is_array(data.media))
+	if (data.media && ! json_is_array(data.media))
 	{
 		json_decref(data.media);
 		data.media = NULL;
 	}
 	data.run = 1;
-	data.media = media;
 	data.socketpath = malloc(strlen(data.root) + 1 + strlen(data.name) + 1);
 	sprintf(data.socketpath, "%s/%s", data.root, data.name);
 

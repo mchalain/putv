@@ -238,6 +238,7 @@ static const struct cmd_s cmds[] = {{
 	}
 };
 
+int Current_Id = 0;
 FILE *termout = NULL;
 
 int cmdline_checkstate(void *data, json_t *params)
@@ -607,8 +608,8 @@ static int method_search(ctx_t *ctx, const char *arg)
 
 static int method_info(ctx_t *ctx, const char *arg)
 {
-	int ret = -1;
-	int id;
+	int ret = 1;
+	int id = Current_Id;
 	if (arg)
 		ret = sscanf(arg, "%d", &id);
 	if (ret == 1)
@@ -656,9 +657,15 @@ int printevent(ctx_t *ctx, json_t *json_params)
 	int id;
 	json_t *info = json_object();
 
-	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
-	fprintf(termout, "\n%s\n", state);
-	display_info(ctx, info);
+	if (json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info) == 0)
+	{
+		fprintf(termout, "\n%s", state);
+		if (!strcmp(state, "play"))
+			 fprintf(termout, " (%d)", id);
+		fprintf(termout, "\n");
+		display_info(ctx, info);
+		Current_Id = id;
+	}
 	fprintf(termout, "> ");
 	fflush(termout);
 	return 0;

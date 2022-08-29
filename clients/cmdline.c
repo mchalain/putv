@@ -289,7 +289,9 @@ static int method_stop(ctx_t *ctx, const char *arg)
 static int method_volume(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
-	unsigned int volume = atoi(arg);
+	unsigned int volume = 0;
+	if (arg != NULL)
+		volume = atoi(arg);
 	if (volume != -1)
 	{
 		ret = client_volume(ctx->client, NULL, ctx, volume);
@@ -297,9 +299,12 @@ static int method_volume(ctx_t *ctx, const char *arg)
 	return ret;
 }
 
+const char str_pop[] = "pop";
 static int method_media(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	json_error_t error;
 	json_t *media = json_loads(arg, 0, &error);
 	if (media == NULL && ctx->media != NULL)
@@ -316,9 +321,9 @@ static int method_media(ctx_t *ctx, const char *arg)
 		}
 		else if (! strcmp(arg, "default"))
 		{
-			for (int i = 0; i < json_array_size(ctx->media); i++)
+			size_t index;
+			json_array_foreach(ctx->media, index, media)
 			{
-				media = json_array_get(ctx->media, i);
 				json_t *jdefault = json_object_get(media, "default");
 				if (jdefault && json_boolean_value(jdefault))
 					break;
@@ -327,9 +332,9 @@ static int method_media(ctx_t *ctx, const char *arg)
 		}
 		else
 		{
-			for (int i = 0; i < json_array_size(ctx->media); i++)
+			size_t index;
+			json_array_foreach(ctx->media, index, media)
 			{
-				media = json_array_get(ctx->media, i);
 				const char *name = NULL;
 				if (json_is_object(media))
 				{
@@ -348,13 +353,15 @@ static int method_media(ctx_t *ctx, const char *arg)
 		media = json_object();
 		json_object_set_new(media, "media", json_string(arg));
 	}
-	ret = media_change(ctx->client, NULL, ctx, media);
+	ret = media_change(ctx->client, NULL, ctx, json_incref(media));
 	return ret;
 }
 
 static int method_repeat(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	if (! strcmp(arg, "on"))
 		ret = media_options(ctx->client, NULL, ctx, -1, 1);
 	else
@@ -365,6 +372,8 @@ static int method_repeat(ctx_t *ctx, const char *arg)
 static int method_shuffle(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	if (! strcmp(arg, "on"))
 		ret = media_options(ctx->client, NULL, ctx, 1, -1);
 	else
@@ -376,6 +385,8 @@ static int method_append(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	json_error_t error;
+	if (arg == NULL)
+		return ret;
 	json_t *media = json_loads(arg, 0, &error);
 	if (media != NULL)
 	{
@@ -411,8 +422,10 @@ static int method_remove(ctx_t *ctx, const char *arg)
 	if (arg)
 		ret = sscanf(arg, "%d", &id);
 	if (ret == 1)
+	{
 		json_object_set(params, "id", json_integer(id));
-	ret = media_remove(ctx->client, NULL, ctx, params);
+		ret = media_remove(ctx->client, NULL, ctx, params);
+	}
 	return ret;
 }
 
@@ -449,6 +462,8 @@ static int display_media(ctx_t *ctx, json_t *media)
 	int id = json_integer_value(json_object_get(media, "id"));
 	fprintf(termout, "media: %d\n", id);
 	display_info(ctx, info);
+	fprintf(termout, "> ");
+	fflush(termout);
 	return 0;
 }
 
@@ -476,7 +491,7 @@ static int method_list(ctx_t *ctx, const char *arg)
 	int max = 5;
 	if (arg)
 		ret = sscanf(arg, "%d %d", &first, &max);
-	if (ret >= 0)
+	if (ret == 2)
 		ret = media_list(ctx->client, (client_event_prototype_t)display_list, ctx, first, max);
 	else
 		fprintf(stderr, "error on parameter %s\n", strerror(errno));
@@ -499,6 +514,8 @@ struct export_list_s
 static int export_file(void *arg, json_t *list)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	struct export_list_s *data = (struct export_list_s *) arg;
 	ctx_t *ctx = data->ctx;
 
@@ -531,6 +548,8 @@ static int export_file(void *arg, json_t *list)
 static int method_export(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	static struct export_list_s data;
 	data.ctx = ctx;
 	data.outfile = fopen(arg, "w");
@@ -560,6 +579,8 @@ static int method_export(ctx_t *ctx, const char *arg)
 static int method_import(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (arg == NULL)
+		return ret;
 	json_error_t error;
 	json_t *media = json_load_file(arg, 0, &error);
 	if (media != NULL)
@@ -603,6 +624,8 @@ static int method_quit(ctx_t *ctx, const char *arg)
 
 static int method_wait(ctx_t *ctx, const char *arg)
 {
+	if (arg == NULL)
+		return -1;
 	int nb = atoi(arg);
 	media_wait(ctx->client,nb);
 	return 0;
@@ -610,6 +633,8 @@ static int method_wait(ctx_t *ctx, const char *arg)
 
 static int method_sleep(ctx_t *ctx, const char *arg)
 {
+	if (arg == NULL)
+		return -1;
 	int seconds = atoi(arg);
 	sleep(seconds);
 	return 0;
@@ -688,9 +713,7 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	if (method)
 	{
 		ret = method(ctx, arg);
-		if (ret < 0)
-			ctx->run = 0;
-		else
+		if (ret == 0)
 			strcpy(history, buffer);
 	}
 	else
@@ -739,8 +762,11 @@ int run_shell(ctx_t *ctx, int inputfd)
 			while (length > 0)
 			{
 				ret = parse_cmd(ctx, offset);
-				offset += ret;
-				length -= ret;
+				if (ret > 0)
+				{
+					offset += ret;
+					length -= ret;
+				}
 			}
 		}
 	}

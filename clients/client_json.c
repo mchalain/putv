@@ -322,8 +322,13 @@ int client_getposition(client_data_t *data, client_event_prototype_t proto, void
 
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step)
 {
-	data->params = json_object();
-	json_object_set_new(data->params, "step", json_integer(step));
+	if (step != 0)
+	{
+		data->params = json_object();
+		json_object_set_new(data->params, "step", json_integer(step));
+	}
+	else
+		data->params = NULL;
 	return _client_generic(data, proto, protodata, "volume");
 }
 

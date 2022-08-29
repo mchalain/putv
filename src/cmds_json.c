@@ -721,7 +721,6 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	int ret = -1;
 	cmds_dbg("cmds: change");
-	dbg("cmds: change %s", json_dumps(json_params,JSONRPC_DEBUG_FORMAT));
 
 	if (json_is_object(json_params))
 	{
@@ -747,7 +746,6 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_string(value))
 		{
 			const char *str = json_string_value(value);
-			dbg("cmds: try change %s", str);
 			ret = player_change(ctx->player, str, random, loop, now);
 			if (ret >= 0)
 			{

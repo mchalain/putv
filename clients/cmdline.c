@@ -589,14 +589,19 @@ static int method_import(ctx_t *ctx, const char *arg)
 		json_t *params;
 		if (json_is_array(media))
 			params = media;
+		else if (json_is_object(media) && json_object_get(media, "playlist"))
+		{
+			params = json_object_get(media, "playlist");
+		}
 		else
 		{
 			params = json_array();
 			json_array_append(params, media);
 		}
-		ret = media_insert(ctx->client, NULL, ctx, params);
+
+		ret = media_insert(ctx->client, NULL, ctx, json_incref(params));
+		json_decref(media);
 	}
-	json_decref(media);
 	return ret;
 }
 

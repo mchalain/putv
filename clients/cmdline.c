@@ -45,8 +45,9 @@
 #include <libgen.h>
 #include <jansson.h>
 #include <linux/input.h>
-#ifdef USE_LIBINPUT
-#include <libinput.h>
+
+#ifdef CMDLINE_DOWNLOAD
+#include <curl/curl.h>
 #endif
 
 #include "client_json.h"
@@ -577,6 +578,56 @@ static int method_export(ctx_t *ctx, const char *arg)
 	return ret;
 }
 
+#ifdef CMDLINE_DOWNLOAD
+static int import_download(ctx_t *ctx, json_t *sources, json_t *info)
+{
+	json_t *source;
+	size_t index;
+	json_array_foreach(sources, index, source)
+	{
+		json_t *download = json_object_get(source, "download");
+		if (download && json_is_string(download))
+		{
+			const char *title = json_string_value(json_object_get(info, "title"));
+			const char *artist = json_string_value(json_object_get(info, "artist"));
+			const char *album = json_string_value(json_object_get(info, "album"));
+			char path[PATH_MAX + 1] = {0};
+			if (snprintf(path, PATH_MAX, "%s/%s/%s.flac", artist, album, title) < PATH_MAX &&
+				access(path, F_OK))
+			{
+				mkdir(artist, 0755);
+				int fd = open(artist, O_DIRECTORY);
+				mkdirat(fd, album, 0755);
+				FILE *output = fopen(path, "w");
+				CURL *curl = curl_easy_init();
+				if (curl && output)
+				{
+					CURLcode res;
+					curl_easy_setopt(curl, CURLOPT_URL, json_string_value(download));
+					curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+					curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+					curl_easy_setopt(curl, CURLOPT_WRITEDATA, output);
+					if (fork() == 0)
+					{
+						res = curl_easy_perform(curl);
+						curl_easy_cleanup(curl);
+						fclose(output);
+						exit(0);
+					}
+					fclose(output);
+					json_t *local_url = json_sprintf("file://%s", path);
+					json_t *url = json_object_get(source, "url");
+					json_object_set(sources, "url", local_url);
+					json_decref(url);
+				}
+				close(fd);
+			}
+		}
+	}
+	return 0;
+}
+#endif
+
 static int method_import(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
@@ -599,6 +650,16 @@ static int method_import(ctx_t *ctx, const char *arg)
 			json_array_append(params, media);
 		}
 
+#ifdef CMDLINE_DOWNLOAD
+		json_t *track;
+		size_t index;
+		json_array_foreach(params, index, track)
+		{
+			json_t *sources = json_object_get(track, "sources");
+			json_t *info = json_object_get(track, "info");
+			import_download(ctx, sources, info);
+		}
+#endif
 		ret = media_insert(ctx->client, NULL, ctx, json_incref(params));
 		json_decref(media);
 	}

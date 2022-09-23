@@ -130,7 +130,7 @@ void help(const char *name)
 int main(int argc, char **argv)
 {
 	int priority = 0;
-	const char *mediapath = "file://"DATADIR;
+	const char *mediapath = NULL;
 	const char *outarg = "default";
 	pthread_t thread;
 	const char *root = "/tmp";
@@ -145,11 +145,14 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDKVxalrL:d:P:");
+		opt = getopt(argc, argv, "R:n:m:o:u:p:f:hDKVxalrL:d:P:");
 		switch (opt)
 		{
 			case 'R':
 				root = optarg;
+			break;
+			case 'n':
+				name = optarg;
 			break;
 			case 'm':
 				mediapath = optarg;
@@ -167,7 +170,7 @@ int main(int argc, char **argv)
 				filtername = optarg;
 			break;
 			case 'h':
-				help(name);
+				help(basename(argv[0]));
 				return -1;
 			break;
 			case 'x':

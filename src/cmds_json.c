@@ -1297,7 +1297,7 @@ static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
 		if (it != NULL)
 			it->next = info->next;
 	}
-	info->sock = -1;
+	shutdown(info->sock, SHUT_RDWR);
 }
 
 static size_t _cmds_recv(void *buff, size_t size, void *userctx)
@@ -1382,7 +1382,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 	if (ret < 0)
 	{
 		err("cmd: json send error %s", strerror(errno));
-		if (errno != EPIPE)
+		if (errno == EAGAIN)
 			ret = 0;
 	}
 	return ret;
@@ -1472,17 +1472,15 @@ static void *_cmds_json_pthreadsend(void *arg)
 					_cmds_json_removeinfo(ctx, request->info);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
-				/** free the request **/
-				json_decref(request->request);
-				free(request);
-				continue;
 			}
+			/** free the request **/
 			json_decref(request->request);
 			free(request);
 		}
 		while (ctx->eventsmask != 0)
 		{
 			cmds_dbg("cmds: send event");
+			pthread_mutex_lock(&ctx->mutex);
 			if ((ctx->eventsmask & ONCHANGE) == ONCHANGE)
 			{
 				thread_info_t *info = ctx->info;
@@ -1494,15 +1492,16 @@ static void *_cmds_json_pthreadsend(void *arg)
 					wait = 1;
 					if (ret < 0)
 					{
-						pthread_mutex_lock(&ctx->mutex);
 						err("cmds: send event error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
-						pthread_mutex_unlock(&ctx->mutex);
 					}
 					info = next;
 				}
 				ctx->eventsmask &= ~ONCHANGE;
+				ctx->onchangemask = 0;
 			}
+			ctx->eventsmask = 0;
+			pthread_mutex_unlock(&ctx->mutex);
 		}
 	}
 	warn("cmds: leave thread send");

@@ -216,8 +216,10 @@ int client_unix(const char *socketpath, client_data_t *data)
 		int ret = connect(sock, (const struct sockaddr *)&addr, sizeof(addr.sun_path));
 		if (ret != 0)
 		{
+			close(sock);
 			sock = 0;
 			err("client: connect error %s", strerror(errno));
+			return -1;
 		}
 		data->sock = sock;
 		pthread_cond_init(&data->cond, NULL);
@@ -532,6 +534,7 @@ int client_loop(client_data_t *data)
 			{
 				buffer[ret] = 0;
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
+				ret = 0;
 			}
 			else //if (ret == 0)
 				data->run = 0;

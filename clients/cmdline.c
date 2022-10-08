@@ -577,7 +577,7 @@ static int method_export(ctx_t *ctx, const char *arg)
 	data.outfile = fopen(arg, "w");
 	if (data.outfile == NULL)
 	{
-		fprintf(stderr, "error on file %s\n", strerror(errno));
+		fprintf(termout, "error on file %s\n", strerror(errno));
 		return -1;
 	}
 	fprintf(data.outfile, "[");
@@ -814,20 +814,25 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	static char history[1024] = {0};
 	int ret;
 	int length;
-	int start;
+
+	char *start = buffer;
+	while (start[0] == ' ') start++;
 
 	char *end = NULL;
-	end = strchrnul(buffer, '\n');
+	end = strchrnul(start, '\n');
 	if (end != NULL)
 		*end = '\0';
 
-	if (end == buffer)
+	if (end == start)
+	{
 		strcpy(buffer, history);
+		start = buffer;
+	}
 	method_t method = NULL;
 	for (int i = 0; cmds[i].name != NULL; i++)
 	{
-		start = strlen(cmds[i].name);
-		if (!strncmp(buffer, cmds[i].name, start))
+		length = strlen(cmds[i].name);
+		if (!strncmp(start, cmds[i].name, length))
 		{
 			method = cmds[i].method;
 			break;
@@ -837,21 +842,21 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	{
 		if ( cmds[i].shortkey == 0)
 			continue;
-		if (buffer[0] == cmds[i].shortkey && &buffer[1] == end)
+		if (start[0] == cmds[i].shortkey && (start + 1) == end)
 		{
 			method = cmds[i].method;
-			start = 1;
+			length = 1;
 			break;
 		}
 	}
 	const char *arg = NULL;
-	for (int i = start; &buffer[i] < end; i++)
+	for (int i = length; &start[i] < end; i++)
 	{
-		if (buffer[i] == ' ' || buffer[i] == '\t')
+		if (start[i] == ' ' || start[i] == '\t')
 			continue;
 		if (method != NULL)
 		{
-			arg = &buffer[i];
+			arg = &start[i];
 			break;
 		}
 	}
@@ -859,17 +864,16 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	{
 		ret = method(ctx, arg);
 		if (ret == 0)
-			strcpy(history, buffer);
+			strcpy(history, start);
 	}
 	else
-		fprintf(stdout, " command not found\n");
+		fprintf(termout, " command not found\n");
 	return end - buffer + 1;
 }
 
-int run_shell(ctx_t *ctx, int inputfd)
+int run_shell(ctx_t *ctx)
 {
-	ctx->run = 1;
-	while (ctx->run)
+	do
 	{
 		int ret;
 		fd_set rfds;
@@ -877,30 +881,42 @@ int run_shell(ctx_t *ctx, int inputfd)
 		struct timeval *ptimeout = NULL;
 
 		pthread_mutex_lock(&ctx->mutex);
-		while (ctx->client == NULL)
+		warn("RUN %d", ctx->run);
+		while (ctx->client == NULL && ctx->run < 2)
+		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		}
 		pthread_mutex_unlock(&ctx->mutex);
 
 		FD_ZERO(&rfds);
-		FD_SET(inputfd, &rfds);
-		int maxfd = inputfd;
+		FD_SET(ctx->inputfd, &rfds);
+		int maxfd = ctx->inputfd;
 		fprintf (termout, "> ");
 		fflush(termout);
 		ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
 		char buffer[1024];
-		if (ret > 0 && FD_ISSET(inputfd, &rfds))
+		if (ret > 0 && FD_ISSET(ctx->inputfd, &rfds))
 		{
 			int length;
-			ret = ioctl(inputfd, FIONREAD, &length);
+			ret = ioctl(ctx->inputfd, FIONREAD, &length);
 			if (length >= sizeof(buffer))
 			{
-				err("string too long");
+				err("cmdline: string too long");
 				continue;
 			}
-			length = read(inputfd, buffer, length);
-			if (length <= 0)
+			length = read(ctx->inputfd, buffer, length);
+			if (length == 0)
 			{
+				warn("cmdline: end of script");
 				ctx->run = 0;
+			}
+			if (length < 0)
+			{
+				ctx->run = 1;
+				// disconnect to end run_client
+				client_disconnect(ctx->client);
+				// wait that run_client puts ctx->client to NULL
+				sleep(1);
 				continue;
 			}
 			char *offset = buffer;
@@ -914,9 +930,12 @@ int run_shell(ctx_t *ctx, int inputfd)
 				}
 			}
 		}
+	} while (ctx->run);
+	if (ctx->client)
+	{
+		sleep(1); // wait that the last request is treated otherwise the connection closing too fast
+		client_disconnect(ctx->client);
 	}
-	sleep(1); // wait that the last request is treated otherwise the connection closing too fast
-	client_disconnect(ctx->client);
 	return 0;
 }
 
@@ -925,8 +944,16 @@ int run_client(void *arg)
 	ctx_t *ctx = (ctx_t *)arg;
 
 	client_data_t data = {0};
-	client_unix(ctx->socketpath, &data);
-	client_async(&data, 1);
+	warn("cmdline: open socket %s", ctx->socketpath);
+	if (client_unix(ctx->socketpath, &data) < 0)
+	{
+		warn("cmdline: bad socket");
+		return -1;
+	}
+	if (ctx->inputfd)
+		client_async(&data, 0);
+	else
+		client_async(&data, 1);
 	pthread_mutex_lock(&ctx->mutex);
 	ctx->client = &data;
 	pthread_mutex_unlock(&ctx->mutex);
@@ -936,6 +963,7 @@ int run_client(void *arg)
 	client_loop(ctx->client);
 
 	client_disconnect(ctx->client);
+	ctx->client = NULL;
 	return 0;
 }
 
@@ -951,6 +979,8 @@ static void *_check_socket(void *arg)
 	inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(inotifyfd, ctx->root,
 					IN_MODIFY | IN_CREATE | IN_DELETE);
+	dbg("cmdline: wait socket %s", ctx->socketpath);
+	ctx->run = 1;
 	while (ctx->run)
 	{
 		if (!access(ctx->socketpath, R_OK | W_OK))
@@ -1006,10 +1036,10 @@ int main(int argc, char **argv)
 	ctx_t data = {
 		.root = "/tmp",
 		.name = "putv",
+		.inputfd = 0,
 	};
 	const char *media_path = NULL;
 	const char *pidfile = NULL;
-	int inputfd = 0;
 	termout = stdout;
 
 	int opt;
@@ -1037,7 +1067,7 @@ int main(int argc, char **argv)
 				pidfile = optarg;
 			break;
 			case 'i':
-				inputfd = open(optarg, O_RDONLY);
+				data.inputfd = open(optarg, O_RDONLY);
 				termout = fopen("/dev/null", "w");
 			break;
 			case 'h':
@@ -1056,28 +1086,12 @@ int main(int argc, char **argv)
 	{
 		killdaemon(pidfile);
 	}
-	if ((inputfd != 0) && (mode & DAEMONIZE) && daemonize(pidfile) == -1)
+	if ((data.inputfd != 0) && (mode & DAEMONIZE) && daemonize(pidfile) == -1)
 	{
 		return 0;
 	}
 
-	json_error_t error;
-	json_t *media = NULL;
-	if (media_path)
-	{
-		media = json_load_file(media_path, 0, &error);
-		if (media && json_is_object(media))
-		{
-			data.media = json_object_get(media, "media");
-		}
-		else
-			err("media error: %d,%d %s", error.line, error.column, error.text);
-	}
-	if (data.media && ! json_is_array(data.media))
-	{
-		json_decref(data.media);
-		data.media = NULL;
-	}
+	method_load(&data, media_path);
 	data.socketpath = malloc(strlen(data.root) + 1 + strlen(data.name) + 1);
 	sprintf(data.socketpath, "%s/%s", data.root, data.name);
 
@@ -1089,7 +1103,9 @@ int main(int argc, char **argv)
 #else
 	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
-	run_shell(&data, inputfd);
+	dbg("cmdline: new shell");
+	run_shell(&data);
+	dbg("cmdline: end shell");
 
 	pthread_join(thread, NULL);
 

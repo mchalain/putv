@@ -878,7 +878,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 		{
 			random = json_boolean_value(value);
 		}
-		player_change(ctx->player, NULL, random, loop, 0);
+		ret = player_change(ctx->player, NULL, random, loop, 0);
 		if (ret == 0)
 		{
 			int state;

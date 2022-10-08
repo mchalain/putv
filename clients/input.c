@@ -107,25 +107,32 @@ const static struct libinput_interface interface = {
 static int input_checkstate(void *data, json_t *params)
 {
 	input_ctx_t *ctx = (input_ctx_t *)data;
-	const char *state;
-	json_unpack(params, "{ss}", "state", &state);
-	if (!strcmp(state, "play"))
-		ctx->state = STATE_PLAY;
-	else if (!strcmp(state, "pause"))
-		ctx->state = STATE_PAUSE;
-	else if (!strcmp(state, "stop"))
-		ctx->state = STATE_STOP;
+	json_t *jid = json_object_get(params, "id");
+	int id = -1;
+	if (json_is_number(jid))
+		id = json_integer_value(jid);
 
-	const char *string[2] = {NULL, NULL};
-	json_unpack(params, "{s?[ss]}", "options", &string[0], &string[1]);
-	int i;
-	for (i = 0; i < 2; i++)
+	json_t *jstate = json_object_get(params, "state");
+	if (json_is_string(jstate))
 	{
-		if (string[i] == NULL)
-			continue;
-		if (!strcmp(string[i], "random"))
+		const char *state = json_string_value(jstate);
+		if (!strcmp(state, "play"))
+			ctx->state = STATE_PLAY;
+		else if (!strcmp(state, "pause"))
+			ctx->state = STATE_PAUSE;
+		else if (!strcmp(state, "stop"))
+			ctx->state = STATE_STOP;
+	}
+
+	json_t *value;
+	size_t index;
+	json_t *joptions = json_object_get(params, "options");
+	json_array_foreach(joptions, index, value)
+	{
+		const char *string = json_string_value(value);
+		if (string && !strcmp(string, "random"))
 			ctx->state |= STATE_RANDOM;
-		if (!strcmp(string[i], "loop"))
+		if (string && !strcmp(string, "loop"))
 			ctx->state |= STATE_LOOP;
 	}
 
@@ -141,7 +148,7 @@ static int input_parseevent_rel(input_ctx_t *ctx, const struct input_event *even
 		return -1;
 	dbg("rel: %d", event->value);
 
-	int ret = 0;
+	int ret = -1;
 	ret = client_volume(ctx->client, NULL, ctx, event->value * 5);
 
 	return ret;

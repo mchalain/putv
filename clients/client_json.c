@@ -455,18 +455,16 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 		free(data->message);
 		data->message = NULL;
 	}
-	int length = strlen(buffer) + 1;
+	int length = strlen(buffer);
 	if (ret >= 0)
 	{
-		if ((length) < ret)
+		if (length == ret && strstr(buffer, "}{") != NULL)
+		{
+			length = (strstr(buffer, "}{") - (char *)buffer) + 1;
+		}
+		if (length < ret)
 		{
 			err("client: two messages in ONE");
-			/**
-			 * disable the last command, the response may be lost
-			 * TODO
-			 * store the second message and call again the json parser.
-			 */
-			data->pid = 0;
 			client_dbg("client: recv %ld/%d" , strlen(buffer), ret);
 			data->message = malloc(ret - length);
 			memcpy(data->message, buffer + length, ret - length);

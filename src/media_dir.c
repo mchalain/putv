@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #include <pthread.h>
 
@@ -173,12 +174,6 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	return ret;
 }
 
-static int _find_display(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
-{
-	printf("Media: %d, %s\n", mediaid, path);
-	return 1;
-}
-
 static int _find_count(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
 {
 	_find_mediaid_t *mdata = (_find_mediaid_t *)arg;
@@ -292,7 +287,6 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 				char *path = malloc(7 + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
 					sprintf(path, "file://%s/%s", it->path, it->items[it->index]->d_name);
-
 				const char *mime = utils_getmime(it->items[it->index]->d_name);
 				ret = -1;
 				if (strcmp(mime, mime_octetstream) != 0)
@@ -369,50 +363,40 @@ static int media_play(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 
 static int media_next(media_ctx_t *ctx)
 {
-	int ret;
+	int ret = -1;
 	int mediaid = 0;
 
+	mediaid = player_mediaid(ctx->player);
+	_find_mediaid_t data = {mediaid + 1, NULL, NULL};
 	if (ctx->options & OPTION_RANDOM)
 	{
-		mediaid = (random() % (ctx->count - 1));
-		_find_mediaid_t data = {mediaid, NULL, NULL};
-		ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
-		if (mediaid == 0)
-			mediaid = ctx->count;
-		mediaid--;
+		data.id = (int)(((double) random() / INT_MAX) * (ctx->count));
+		if (data.id == mediaid)
+			data.id += 1;
 	}
-	else
+	if (data.id > ctx->count)
+		data.id = 0;
+	if (data.id < mediaid)
 	{
-		int id;
-		media_t *media = player_media(ctx->player);
-		if (media->ctx != ctx)
-			id = -1;
-		else
-			id = ctx->mediaid;
+		mediaid = 0;
+		ctx->current = _free_medialist(ctx->current, 0);
+	}
+	ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
 
-		mediaid = id;
-		_find_mediaid_t data = {id + 1, NULL, NULL};
-		ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
-	}
 	pthread_mutex_lock(&ctx->mutex);
+	if (ctx->firstmediaid == mediaid)
+		ret = -1;
 	ctx->mediaid = mediaid;
-	pthread_mutex_unlock(&ctx->mutex);
-	if (ctx->firstmediaid == -1)
+	if (ret == 0 && ctx->firstmediaid == -1)
 		ctx->firstmediaid = mediaid;
-	if (ret != 0)
+	pthread_mutex_unlock(&ctx->mutex);
+
+	if (ret == -1)
 	{
-		if (ctx->current)
+		if (ctx->options & OPTION_LOOP)
 		{
-			ctx->current = _free_medialist(ctx->current, 0);
-		}
-		ctx->current = NULL;
-		if (ctx->count > mediaid + 1)
-		{
-			mediaid = mediaid + 1;
-		}
-		else if (ctx->options & OPTION_LOOP)
-		{
-			mediaid = ctx->firstmediaid;
+			if (ctx->firstmediaid != mediaid)
+				mediaid = media_next(ctx);
 		}
 		else
 			mediaid = -1;
@@ -446,10 +430,7 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 	else if (enable == OPTION_DISABLE)
 	{
 		ctx->options &= ~OPTION_RANDOM;
-		if (ctx->mediaid != -1)
-			ctx->firstmediaid = ctx->mediaid;
-		else
-			ctx->firstmediaid = 0;
+		ctx->firstmediaid = -1;
 	}
 	return (ctx->options & OPTION_RANDOM)? OPTION_ENABLE: OPTION_DISABLE;
 }
@@ -556,7 +537,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->url = url;
 		ctx->root = path;
 		ctx->mediaid = -1;
-		ctx->firstmediaid = 0;
+		ctx->firstmediaid = -1;
 		pthread_mutex_init(&ctx->mutex, NULL);
 		_count_media(ctx);
 

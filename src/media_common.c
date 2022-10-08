@@ -700,12 +700,13 @@ media_t *media_build(player_ctx_t *player, const char *url)
 	{
 		free(current_path);
 		current_path = oldpath;
-		err("media not found %s", url);
+		err("media: %s not found", url);
 		return NULL;
 	}
 	media_t *media = calloc(1, sizeof(*media));
 	media->ops = media_list[i];
 	media->ctx = media_ctx;
+	warn("media: %s new library", url);
 	if (oldpath)
 		free(oldpath);
 

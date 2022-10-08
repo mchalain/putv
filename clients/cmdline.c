@@ -395,7 +395,7 @@ static int method_shuffle(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	if (arg == NULL)
-		return ret;
+		arg = "on";
 	if (! strcmp(arg, "on"))
 		ret = media_options(ctx->client, NULL, ctx, 1, -1);
 	else

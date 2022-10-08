@@ -425,6 +425,7 @@ int media_wait(client_data_t *data, int nb)
 	while (nb > 0)
 	{
 		pthread_cond_wait(&cond, &mutex);
+		nb --;
 	}
 	pthread_cond_destroy(&cond);
 	pthread_mutex_destroy(&mutex);

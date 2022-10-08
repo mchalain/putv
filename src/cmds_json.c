@@ -861,43 +861,27 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret = -1;
 	media_t *media = player_media(ctx->player);
-	int loopstate = -1;
-	int randomstate = -1;
+	int loop = -1;
+	int random = -1;
 
 	if (json_is_object(json_params))
 	{
 		json_t *value = NULL;
-		int state = -1;
 
 		value = json_object_get(json_params, "loop");
 		if (json_is_boolean(value))
 		{
-			state = json_boolean_value(value);
-			if (media->ops->loop)
-			{
-				loopstate = media->ops->loop(media->ctx, state);
-				ret = 0;
-			}
-
+			loop = json_boolean_value(value);
 		}
 		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
 		{
-			state = json_boolean_value(value);
-			if (media->ops->random)
-			{
-				randomstate = media->ops->random(media->ctx, state);
-				ret = 0;
-				if (randomstate == OPTION_DISABLE && media->ops->find != NULL)
-				{
-					int id = player_mediaid(ctx->player);
-					id += 1;
-					ret = player_play(ctx->player, id);
-				}
-			}
+			random = json_boolean_value(value);
 		}
+		player_change(ctx->player, NULL, random, loop, 0);
 		if (ret == 0)
 		{
+			int state;
 			*result = json_object();
 			state = media->ops->loop(media->ctx, OPTION_REQUEST);
 			value = json_boolean(state);

@@ -87,10 +87,10 @@ player_ctx_t *player_init(const char *filtername)
 
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now)
 {
-	media_t *media = media_build(ctx, mediapath);
-	if (media == NULL)
+	media_t *media = NULL;
+	if (mediapath != NULL)
 	{
-		return -1;
+		media = media_build(ctx, mediapath);
 	}
 	if (media)
 	{
@@ -105,14 +105,24 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		ctx->media = media;
 		pthread_mutex_unlock(&ctx->mutex);
 
-		if (media->ops->loop && loop)
+		event_player_state_t event = {
+				.playerctx = ctx,
+				.state = ctx->state,
+				.mediapath = mediapath,
+		};
+		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
+	}
+	if (ctx->media)
+	{
+		if (ctx->media->ops->loop && random != -1)
 		{
-			media->ops->loop(media->ctx, OPTION_ENABLE);
+			ctx->media->ops->loop(ctx->media->ctx, loop);
 		}
-		if (media->ops->random && random)
+		if (ctx->media->ops->random && random != -1)
 		{
-			media->ops->random(media->ctx, OPTION_ENABLE);
+			ctx->media->ops->random(ctx->media->ctx, random);
 		}
+
 		/**
 		 * If stoped the next opus is ready with the new media
 		 * Otherwise the next opsu comes from the previous media
@@ -347,6 +357,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 			const event_decode_es_t event_decode = {.pid = 0, .src = src, .decoder = event_new.decoder};
 			_player_listener(ctx, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		}
+		warn("player: next %s", url);
 		return 0;
 	}
 	else
@@ -502,6 +513,7 @@ int player_run(player_ctx_t *ctx)
 		event_player_state_t event = {
 				.playerctx = ctx,
 				.state = ctx->state,
+				.mediapath = NULL,
 		};
 		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 

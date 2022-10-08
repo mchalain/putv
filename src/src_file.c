@@ -165,6 +165,7 @@ static int _src_prepare(src_ctx_t *ctx, const char *info)
 	/**
 	 * the decoder or demux must be attached here.
 	 */
+	 return 0;
 }
 
 static int _src_run(src_ctx_t *ctx)

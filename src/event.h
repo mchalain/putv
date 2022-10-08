@@ -48,6 +48,7 @@ struct event_player_state_s
 {
 	player_ctx_t *playerctx;
 	int state;
+	const char *mediapath;
 };
 
 typedef struct event_player_position_s event_player_position_t;

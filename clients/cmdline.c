@@ -86,6 +86,8 @@ struct ctx_s
 	pthread_mutex_t mutex;
 };
 
+static int printevent(ctx_t *ctx, json_t *json_params);
+
 typedef int (*method_t)(ctx_t *ctx, const char *arg);
 
 static int method_append(ctx_t *ctx, const char *arg);
@@ -707,33 +709,85 @@ static int method_sleep(ctx_t *ctx, const char *arg)
 	return 0;
 }
 
+static int method_load(ctx_t *ctx, const char *media_path)
+{
+	int ret = -1;
+	json_error_t error;
+	json_t *media = NULL;
+	if (media_path)
+	{
+		media = json_load_file(media_path, 0, &error);
+		if (media && json_is_object(media))
+		{
+			if (ctx->media)
+				json_decref(ctx->media);
+			ctx->media = json_object_get(media, "media");
+			if (! json_is_array(ctx->media))
+			{
+				json_decref(ctx->media);
+				ctx->media = NULL;
+			}
+		}
+		else
+			err("media error: %d,%d %s", error.line, error.column, error.text);
+	}
+	if (ctx->media)
+	{
+		ret = 0;
+	}
+	return ret;
+}
+
 static int method_help(ctx_t *ctx, const char *arg)
 {
-	fprintf(stderr, "putv commands:\n");
+	fprintf(termout, "putv commands:\n");
 	for (int i = 0; cmds[i].name != NULL; i++)
 	{
-		fprintf(stderr, " %s : %s\n", cmds[i].name, cmds[i].help);
+		fprintf(termout, " %s : %s\n", cmds[i].name, cmds[i].help);
 	}
 	return 0;
 }
 
-int printevent(ctx_t *ctx, json_t *json_params)
+static int printevent(ctx_t *ctx, json_t *json_params)
 {
-	char *state;
-	int id;
-	json_t *info = json_object();
+	json_t *jid = json_object_get(json_params, "id");
+	int id = -1;
+	if (json_is_number(jid))
+		id = json_integer_value(jid);
+	warn("cmdline: data from server");
 
-	if (json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info) == 0)
+	json_t *jstate = json_object_get(json_params, "state");
+	if (json_is_string(jstate))
 	{
+		const char *state = json_string_value(jstate);
 		fprintf(termout, "\n%s", state);
-		if (!strcmp(state, "play"))
+		if (id >= 0 && !strcmp(state, "play"))
 			 fprintf(termout, " (%d)", id);
+		json_t *joptions = json_object_get(json_params, "options");
+		if (json_is_array(joptions))
+		{
+			size_t index = 0;
+			json_t *jvalue;
+			json_array_foreach(joptions, index, jvalue)
+			{
+				const char *option = json_string_value(jvalue);
+				fprintf(termout, " %s", option);
+			}
+		}
 		fprintf(termout, "\n");
-		display_info(ctx, info);
+	}
+	json_t *jinfo = json_object_get(json_params, "info");
+	if (json_is_object(jinfo))
+	{
+		display_info(ctx, jinfo);
 		Current_Id = id;
 	}
 	fprintf(termout, "> ");
 	fflush(termout);
+	if (ctx->run == 1)
+		ctx->run = 2;
+	pthread_cond_broadcast(&ctx->cond);
+
 	return 0;
 }
 

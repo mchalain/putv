@@ -257,16 +257,16 @@ static const struct cmd_s cmds[] = {{
 int Current_Id = 0;
 FILE *termout = NULL;
 
-int cmdline_checkstate(void *data, json_t *params)
+static int cmdline_checkstate(void *data, json_t *params)
 {
 	ctx_t *ctx = (ctx_t *)data;
-	const char *state;
-	json_unpack(params, "{ss}", "state", &state);
-	if (!strcmp(state, "play"))
+	json_t *jstate = json_object_get(params, "state");
+	const char *state = json_string_value(jstate);
+	if (state && !strcmp(state, "play"))
 		ctx->state = STATE_PLAY;
-	else if (!strcmp(state, "pause"))
+	else if (state && !strcmp(state, "pause"))
 		ctx->state = STATE_PAUSE;
-	else if (!strcmp(state, "stop"))
+	else if (state && !strcmp(state, "stop"))
 		ctx->state = STATE_STOP;
 	else
 		ctx->state = STATE_UNKNOWN;

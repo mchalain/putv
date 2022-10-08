@@ -105,7 +105,6 @@ class PlayerInfo extends PlayerCmd
 			// fill "#info"
 			this.#setinfo($('#info'), info);
 		}
-		console.log("infobox", $('#infobox').data('id'));
 		if ($('#infobox').data('id') == id) {
 			$('#infobox').modal('show');
 			// clean "#infobox"
@@ -331,6 +330,11 @@ initIHM = function()
 		.on("click", function(evt)
 			{
 				g_player.list({maxitems:g_player.maxitems, first:$(this).data('firstid') - g_player.maxitems});
+			});
+	$('#info * .id')
+		.on("click", function(evt)
+			{
+				g_player.list({maxitems:g_player.maxitems, first:$(this).data('id') + g_player.maxitems});
 			});
 	$('#filter').on("click", function(evt)
 		{
@@ -707,7 +711,7 @@ window.addEventListener('resize', function(event) {
 								</div>
 								<div class="col-1 d-none d-md-block pull-right mt-1">
 									<span class="ḧ5" id='counter'>
-										<span class="id" id='current-id'></span>/<span class="count" id='media-count'></span>
+										<a class="id" id='current-id' href='#'></a>/<span class="count" id='media-count'></span>
 									</span>
 								</div>
 							</div>

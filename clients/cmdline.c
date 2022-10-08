@@ -103,12 +103,14 @@ static int method_info(ctx_t *ctx, const char *arg);
 static int method_play(ctx_t *ctx, const char *arg);
 static int method_pause(ctx_t *ctx, const char *arg);
 static int method_stop(ctx_t *ctx, const char *arg);
+static int method_status(ctx_t *ctx, const char *arg);
 static int method_next(ctx_t *ctx, const char *arg);
 static int method_volume(ctx_t *ctx, const char *arg);
 static int method_repeat(ctx_t *ctx, const char *arg);
 static int method_shuffle(ctx_t *ctx, const char *arg);
 static int method_wait(ctx_t *ctx, const char *arg);
 static int method_sleep(ctx_t *ctx, const char *arg);
+static int method_load(ctx_t *ctx, const char *arg);
 static int method_quit(ctx_t *ctx, const char *arg);
 static int method_help(ctx_t *ctx, const char *arg);
 
@@ -119,6 +121,12 @@ struct cmd_s {
 	method_t method;
 };
 static const struct cmd_s cmds[] = {{
+		.shortkey = 0,
+		.name = "load",
+		.method = method_load,
+		.help = "load a json configuration file\n" \
+			"        <json file>",
+	},{
 		.shortkey = 0,
 		.name = "append",
 		.method = method_append,
@@ -190,6 +198,11 @@ static const struct cmd_s cmds[] = {{
 		.name = "stop",
 		.method = method_stop,
 		.help = "stop the stream",
+	},{
+		.shortkey = 0,
+		.name = "status",
+		.method = method_status,
+		.help = "request server status\n",
 	},{
 		.shortkey = 'n',
 		.name = "next",
@@ -288,6 +301,11 @@ static int method_pause(ctx_t *ctx, const char *arg)
 static int method_stop(ctx_t *ctx, const char *arg)
 {
 	return client_stop(ctx->client, cmdline_checkstate, ctx);
+}
+
+static int method_status(ctx_t *ctx, const char *arg)
+{
+	return client_status(ctx->client, (client_event_prototype_t)printevent, ctx);
 }
 
 static int method_volume(ctx_t *ctx, const char *arg)

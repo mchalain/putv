@@ -1,22 +1,19 @@
 # putv config.
-DAEMON=%DAEMON%
 PUTV_WEB=%PUTV_WEB%
 
 CINPUT_DEVICE="/dev/input/event0"
 CINPUT_JSON="${PUTV_WEB}/htdocs/apps/ouiradio.json"
-WEBSOCKETDIR=${PUTV_WEB}/websocket
-FILTER=pcm?mono=mixed
-MIXER=%MIXER%
+WEBSOCKETDIR="${PUTV_WEB}/websocket"
+WEBSOCKETNAME=%WEBSOCKETNAME%
 
-case $DAEMON in
-  putv)
+OUTPUT="%OUTPUT%"
+if [ -z "$OUTPUT" ]; then
+  if [ -e /sys/class/sound/card0 ]; then
+    FILTER=%FILTER%
+    MIXER=%MIXER%
     OUTPUT="alsa://default?format=24le,mixer=${MIXER}"
-    ;;
-  totem)
+  else
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
-    ;;
-  ouiradio)
-    OUTPUT="rtp://224.0.0.0:4400"
-    ;;
-esac
+  fi
+fi
 

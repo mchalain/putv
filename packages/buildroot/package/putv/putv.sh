@@ -6,15 +6,21 @@
 BINDIR="/usr/bin/"
 DAEMON="putv"
 PIDFILE="/var/run/$DAEMON.pid"
-MEDIA="file:///media"
 WEBSOCKETDIR="/var/run/websocket"
-USER="www-data"
+WEBSOCKETNAME=$DAEMON
 LOGFILE="/var/log/$DAEMON.log"
 FILTER="pcm?stereo"
+USER=
+MEDIA=
+SERVER=0
 OUTPUT=""
 
 OPTIONS=""
-[ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
+if [ -r "/etc/default/$DAEMON" ]; then
+	. "/etc/default/$DAEMON"
+else
+	[ -r "/etc/default/$0" ] && . "/etc/default/$0"
+fi
 
 prepare() {
 	if echo $MEDIA | grep -q db:// ; then
@@ -27,13 +33,17 @@ prepare() {
 }
 
 start() {
-#	OPTIONS="${OPTIONS} -m ${MEDIA}"
-#	OPTIONS="${OPTIONS} -a -l -r"
-# 	OPTIONS="${OPTIONS} -a -r"
+	if [ "${MEDIA}" != "" ]; then
+		OPTIONS="${OPTIONS} -m ${MEDIA}"
+#		OPTIONS="${OPTIONS} -a -l -r"
+		OPTIONS="${OPTIONS} -a"
+	fi
 	OPTIONS="${OPTIONS} -R ${WEBSOCKETDIR}"
-#	OPTIONS="${OPTIONS} -u ${USER}"
+	OPTIONS="${OPTIONS} -n ${WEBSOCKETNAME}"
+	if [ "${USER}" != "" ]; then
+		OPTIONS="${OPTIONS} -u ${USER}"
+	fi
 	OPTIONS="${OPTIONS} -L ${LOGFILE}"
-	OPTIONS="${OPTIONS} -p ${PIDFILE}"
 	OPTIONS="${OPTIONS} -f ${FILTER}"
 	if [ "${PRIORITY}" != "" ]; then
 		OPTIONS="${OPTIONS} -P ${PRIORITY}"
@@ -41,13 +51,12 @@ start() {
 	if [ "${OUTPUT}" != "" ]; then
 		OPTIONS="${OPTIONS} -o ${OUTPUT}"
 	fi
-	OPTIONS="${OPTIONS} -D"
 
 	if [ -e /etc/gpiod/rules.d/putv.conf ] && [ -z "$GPIO" ]; then
 		exit 0
 	fi
 	printf 'Starting %s: ' "$DAEMON"
-	start-stop-daemon -S -q -x "${BINDIR}${DAEMON}" \
+	start-stop-daemon -b -m -p ${PIDFILE} -S -q -x "${BINDIR}${DAEMON}" \
 		-- $OPTIONS
 	status=$?
 	if [ "$status" -eq 0 ]; then

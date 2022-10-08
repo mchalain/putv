@@ -87,8 +87,11 @@ void unixserver_remove(thread_info_t *info)
 	}
 	if (it != NULL)
 		it->next = info->next;
-	shutdown(info->sock, SHUT_RDWR);
-	close(info->sock);
+	if (info->sock > 0)
+	{
+		shutdown(info->sock, SHUT_RDWR);
+		close(info->sock);
+	}
 	free(info);
 	pthread_mutex_unlock(&server->lock);
 }

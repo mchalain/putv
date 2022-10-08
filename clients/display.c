@@ -68,23 +68,9 @@ struct display_ctx_s
 	char run;
 };
 
-int display_default(void *eventdata, json_t *json_params)
+static int display_info(display_ctx_t *ctx, json_t *info)
 {
-	display_ctx_t *data = (display_ctx_t *)eventdata;
-	display_t *disp = &data->disp;
-	char *state;
-	int id;
-	json_t *info = json_object();
-
-	disp->ops->clear(disp->ctx);
-	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
-	if (!strcmp(state, "play"))
-		disp->ops->print(disp->ctx, c_state, state);
-	else if (!strcmp(state, "pause"))
-		disp->ops->print(disp->ctx, c_state, state);
-	else if (!strcmp(state, "stop"))
-		disp->ops->print(disp->ctx, c_state, state);
-
+	display_t *disp = &ctx->disp;
 	const unsigned char *key = NULL;
 	json_t *value;
 	json_object_foreach(info, key, value)
@@ -98,6 +84,32 @@ int display_default(void *eventdata, json_t *json_params)
 			}
 		}
 	}
+
+	return 0;
+}
+
+int display_default(void *eventdata, json_t *json_params)
+{
+	display_ctx_t *ctx = (display_ctx_t *)eventdata;
+	display_t *disp = &ctx->disp;
+	disp->ops->clear(disp->ctx);
+	json_t *jid = json_object_get(json_params, "id");
+	int id = -1;
+	if (json_is_number(jid))
+		id = json_integer_value(jid);
+
+	json_t *jstate = json_object_get(json_params, "state");
+	if (json_is_string(jstate))
+	{
+		const char *state = json_string_value(jstate);
+		disp->ops->print(disp->ctx, c_state, state);
+	}
+	json_t *jinfo = json_object_get(json_params, "info");
+	if (json_is_object(jinfo))
+	{
+		display_info(ctx, jinfo);
+	}
+
 	disp->ops->flush(disp->ctx);
 
 	return 0;

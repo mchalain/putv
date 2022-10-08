@@ -705,9 +705,9 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 	else if (json_is_array(result))
 		object = json_object();
 
-	_print_entry(object, id, url, info, mime);
 	json_t *index = json_integer(id);
 	json_object_set(object, "id", index);
+	_print_entry(object, id, url, info, mime);
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
@@ -796,10 +796,17 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 
 		int count = media->ops->count(media->ctx);
 		json_object_set(*result, "count", json_integer(count));
+	}
 
+	if (media != NULL && (ctx->onchangemask & ONCHANGE_MEDIA))
+	{
 		const char *mediapath = media_path();
 		json_object_set(*result, "media", json_string(mediapath));
 
+	}
+
+	if (media != NULL)
+	{
 		json_t *options = json_array();
 		if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
 		{
@@ -810,8 +817,6 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 			json_array_append(options, json_string("random"));
 		}
 		json_object_set(*result, "options", options);
-		ctx->onchangemask &= ~ONCHANGE_SOURCE;
-		ctx->onchangemask &= ~ONCHANGE_MEDIA;
 	}
 
 	json_t *json_state;
@@ -835,15 +840,20 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
-		ctx->onchangemask &= ~ONCHANGE_VOLUME;
 	}
 	return 0;
 }
 
 static int method_status(json_t *json_params, json_t **result, void *userdata)
 {
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	cmds_dbg("cmds: status");
-	return method_onchange(json_params, result, userdata);
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->onchangemask |= ONCHANGE_SOURCE | ONCHANGE_MEDIA | ONCHANGE_VOLUME;
+	int ret = method_onchange(json_params, result, userdata);
+	ctx->onchangemask = 0;
+	pthread_mutex_unlock(&ctx->mutex);
+	return ret;
 }
 
 static int method_options(json_t *json_params, json_t **result, void *userdata)
@@ -1348,10 +1358,11 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 			event_player_state_t *eventval = (event_player_state_t *)eventarg;
 			if (eventval->state != STATE_CHANGE)
 				ctx->eventsmask |= ONCHANGE;
-			else
+			if (eventval->state == STATE_PLAY)
 				ctx->onchangemask |= ONCHANGE_SOURCE;
 			pthread_mutex_unlock(&ctx->mutex);
-			pthread_cond_broadcast(&ctx->cond);
+			if (eventval->state != STATE_CHANGE)
+				pthread_cond_broadcast(&ctx->cond);
 		break;
 		case SINK_EVENT_VOLUME:
 			pthread_mutex_lock(&ctx->mutex);
@@ -1539,6 +1550,8 @@ static int jsonrpc_command(thread_info_t *info)
 	warn("cmds: json socket connection");
 	event_player_state_t event = {.playerctx = ctx->player};
 	event.state = player_state(ctx->player, STATE_UNKNOWN);
+	ctx->onchangemask |= (ONCHANGE_MEDIA | ONCHANGE_SOURCE | ONCHANGE_VOLUME);
+
 	jsonrpc_onchange(ctx, PLAYER_EVENT_CHANGE, &event);
 	errno = 0;
 	int run = 1;

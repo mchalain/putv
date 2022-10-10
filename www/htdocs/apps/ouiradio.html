@@ -169,7 +169,7 @@ class PlayerInfo extends PlayerCmd
 	};
 	changelist(playlist, count) {
 		var firstid = 0;
-		var $deletemenu = undefined;
+		var $deletemenu = false;
 		var $playlist = $('#playlist * .list-group');
 		var options = $playlist.data('options');
 		if (options && typeof(options) == "string" && options != "") {
@@ -177,14 +177,14 @@ class PlayerInfo extends PlayerCmd
 			for (let option of options)
 			{
 				if (options[j] == "remove")
-					$deletemenu = $("<a href='#' class='button remove'><span class='glyphicon glyphicon-trash'></span></a>");
+					$deletemenu = true;
 			}
 		}
 
-		firstid = playlist[0].id;
 		if (playlist.length > 0) {
+			firstid = playlist[0].id;
 			$playlist.removeClass('hidden');
-			if ($playlist.find('#item-'+playlist[0].id).length == 0)
+			if ($playlist.find('#item-'+firstid).length == 0)
 				$playlist.html('');
 			else {
 				$playlist.children('.bg-secondary').removeClass('bg-secondary text-light');
@@ -201,20 +201,17 @@ class PlayerInfo extends PlayerCmd
 					if (escapingname == undefined)
 						escapingname = "unknown";
 
-					$elem = $("<li class='playlist-item list-group-item list-group-item-action align-items-start' data-type='"+playlist[item].sources[0].mime+"' id='item-"+playlist[item].id+"' data-id='"+playlist[item].id+"' data-href=\""+escapingname+"\" >" +
-								"<div class='d-flex w-100 justify-content-between align-middle'>"+
-									"<a href='#' class='col btn link text-start'>"+
-										"<span class='title fw-bold'>"+escapingname+"</span> - "+
-										"<span class='artist'>"+info.artist+"</span>"+
-									"</a>"+
-									"<a href='#' class='col-1 pt-2 btn info'>"+
-//										"<span class='visually-hidden'>open info</span>"+
-										"<span class='glyphicon glyphicon-comment' aria-hidden='true'> </span>"+
-									"</a>"+
-								"</div>"+
-							"</li>");
+					let template = document.getElementById('playlist-item');
+					let content = template.content.firstElementChild;
+					$elem = $(content.cloneNode(true));
+					$elem.data("href",escapingname);
+					$elem.data("id",playlist[item].id);
+					$elem.data("type",playlist[item].sources[0].mime);
+					$elem.attr("id",'item-'+playlist[item].id);
+					$elem.find(".title").text(escapingname);
+					$elem.find(".artist").text(info.artist);
 					if ($deletemenu)
-						$elem.append($deletemenu);
+						$elem.find(".remove").removeClass('hidden');
 					$elem.find('.link').on('click', function (event)
 						{
 							var next = $(event.currentTarget).parents('.playlist-item').data('id');
@@ -680,6 +677,23 @@ window.addEventListener('resize', function(event) {
 						</div>
 						<ul class="playlist list-group list-group-flush ProtectedButton">
 						</ul>
+						<template id='playlist-item'>
+							<li class="playlist-item list-group-item list-group-item-action align-items-start">
+								<div class="d-flex w-100 justify-content-between align-middle">
+									<a href='#' class="col btn link text-start">
+										<span class="title fw-bold"></span>
+										<span class="artist"></span>
+									</a>
+									<a href='#' class="col-1 pt-2 btn info">
+										<span class="visually-hidden">open info</span>
+										<span class="glyphicon glyphicon-comment" aria-hidden="true"></span>
+									</a>
+									<a href='#' class="col-1 pt-2 btn remove hidden">
+										<span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
+									</a>
+								</div>
+							</li>
+						</template>
 						<div class="card-body">
 							<nav aria-label="Page navigation">
 							  <ul class="pagination justify-content-between">

@@ -409,6 +409,7 @@ class PlayerCmd extends Player
 		message.addgroup(buttons_vol);
 		this.#cmdcontrol = message;
 		this.#cmdbar.load(message, this.#id);
+		this.#cmdaction = "refresh";
 	}
 	changeoptions(id, options) {
 		var cmdbar = {

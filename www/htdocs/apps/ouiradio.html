@@ -82,9 +82,7 @@ class PlayerInfo extends PlayerCmd
 	changemedia(id, media) {
 		if (media == "changed")
 		{
-			var $playlist = $('#playlist * .list-group');
-			$playlist.children("li").remove();
-			this.list({id:0});
+			this.load();
 		}
 	}
 	changeinfo(id, info) {
@@ -305,7 +303,6 @@ var g_cmdbar = new CmdBarClient(function(message) {
 		for (medium of g_config.media) {
 			if (medium.name == composite[1]) {
 				g_player.change(medium);
-				g_player.list({maxitems:g_player.maxitems, first: 0});
 				break;
 			}
 		}

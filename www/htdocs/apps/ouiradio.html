@@ -328,7 +328,7 @@ initIHM = function()
 	$('#info * .id')
 		.on("click", function(evt)
 			{
-				g_player.list({maxitems:g_player.maxitems, first:$(this).data('id') + g_player.maxitems});
+				g_player.list({maxitems:g_player.maxitems, first:parseInt($(this).text()) });
 			});
 	$('#filter').on("click", function(evt)
 		{
@@ -722,7 +722,7 @@ window.addEventListener('resize', function(event) {
 								</div>
 								<div class="col-1 d-none d-md-block pull-right mt-1">
 									<span class="ḧ5" id='counter'>
-										<a class="id" id='current-id' href='#'></a>/<span class="count" id='media-count'></span>
+										<a class="id link-dark" id='current-id' href='#'></a>/<span class="count" id='media-count'></span>
 									</span>
 								</div>
 							</div>

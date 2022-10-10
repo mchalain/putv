@@ -1006,7 +1006,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	if (media->ops->next != NULL)
+	if (media && media->ops->next != NULL)
 	{
 		action = json_object();
 		value = json_string("next");
@@ -1029,7 +1029,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	json_array_append(params, value);
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	if (media->ops->list != NULL)
+	if (media && media->ops->list != NULL)
 	{
 		action = json_object();
 		value = json_string("list");
@@ -1042,7 +1042,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (media->ops->filter != NULL)
+	if (media && media->ops->filter != NULL)
 	{
 		action = json_object();
 		value = json_string("filter");
@@ -1063,7 +1063,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (media->ops->find != NULL)
+	if (media && media->ops->find != NULL)
 	{
 		action = json_object();
 		value = json_string("setnext");
@@ -1074,7 +1074,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (media->ops->insert != NULL)
+	if (media && media->ops->insert != NULL)
 	{
 		action = json_object();
 		value = json_string("append");
@@ -1087,7 +1087,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (media->ops->remove != NULL)
+	if (media && media->ops->remove != NULL)
 	{
 		action = json_object();
 		value = json_string("remove");
@@ -1099,7 +1099,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_array_append(actions, action);
 	}
 	action = NULL;
-	if (media->ops->random != NULL)
+	if (media && media->ops->random != NULL)
 	{
 		if (action == NULL)
 		{
@@ -1111,7 +1111,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		value = json_string("random");
 		json_array_append(params, value);
 	}
-	if (media->ops->loop != NULL)
+	if (media && media->ops->loop != NULL)
 	{
 		if (action == NULL)
 		{

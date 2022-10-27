@@ -114,7 +114,7 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	}
 	if (ctx->media)
 	{
-		if (ctx->media->ops->loop && random != -1)
+		if (ctx->media->ops->loop && loop != -1)
 		{
 			ctx->media->ops->loop(ctx->media->ctx, loop);
 		}

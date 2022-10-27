@@ -59,6 +59,7 @@ sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int samplerate,
 	if (channel != 0)
 		return sample;
 
+	filter_dbg("filter: stat");
 	if (ctx->lapswindow == 0)
 		ctx->lapswindow = samplerate * 10; // 10s
 	sample_t asample = 0;

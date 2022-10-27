@@ -51,6 +51,7 @@ mono_t *mono_init(mono_t *input, int channel)
 
 sample_t mono_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
+	filter_dbg("filter: mono");
 	mono_t *ctx = (mono_t *)arg;
 	sample_t nextsample = ctx->sample;
 	if (channel == ctx->channel)

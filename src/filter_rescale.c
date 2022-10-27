@@ -84,8 +84,9 @@ rescale_t *rescale_init(rescale_t *input, int outbits, jitter_format_t outformat
 sample_t rescale_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
 	rescale_t *ctx = (rescale_t *)arg;
-	if (bitspersample < ctx->outbits)
+	if (bitspersample <= ctx->outbits)
 		return sample;
+	filter_dbg("filter: rescale");
 
 	sample_t one = ((sample_t)1 << bitspersample);
 	//sample &= (one - 1);

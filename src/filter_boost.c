@@ -58,6 +58,7 @@ boost_t *boost_init(boost_t *input, int db)
 
 sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
+	filter_dbg("filter: boost");
 	boost_t *ctx = (boost_t *)arg;
 	return ctx->cb(ctx, sample, bitspersample, channel);
 }

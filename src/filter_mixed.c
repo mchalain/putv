@@ -51,6 +51,7 @@ mixed_t *mixed_init(mixed_t *input, int nchannels)
 
 sample_t mixed_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
+	filter_dbg("filter: mixed");
 	mixed_t *ctx = (mixed_t *)arg;
 	if (channel == 0)
 	{

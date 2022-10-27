@@ -208,6 +208,9 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 		sample = sampleditem->cb(sampleditem->arg, sample, bitspersample, samplerate, channel);
 		sampleditem = sampleditem->next;
 	}
+#if FILTER_DUMP == 3
+	write(ctx->dumpfd, &sample, ctx->samplesize);
+#endif
 
 	int i = 0, j = 0;
 	for (i = 0; i < ctx->samplesize; i++)
@@ -259,11 +262,14 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 				goto filter_exit;
 
 			sample = get(ctx, audio, j, i);
-#ifdef FILTER_DUMP
+#if FILTER_DUMP == 1
 			write(ctx->dumpfd, &sample, ctx->samplesize);
 #endif
 			int len = sampled_change(ctx, sample, audio->bitspersample,
 					audio->samplerate, j, buffer + bufferlen);
+#if FILTER_DUMP == 2
+			write(ctx->dumpfd, &buffer[bufferlen], ctx->samplesize);
+#endif
 			bufferlen += len;
 		}
 	}

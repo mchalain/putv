@@ -567,7 +567,7 @@ int media_parseoggmetadata(const char *path, json_t *object)
 	FLAC__StreamMetadata *vorbiscomment = NULL;
 	if (!FLAC__metadata_get_tags(path, &vorbiscomment))
 	{
-		warn("media: no Vorbis Comment for %s", path);
+		dbg("media: no Vorbis Comment for %s", path);
 		return -1;
 	}
 	FLAC__StreamMetadata_VorbisComment *data;

@@ -63,28 +63,28 @@
 
 #define media_dbg(...)
 
-const char const *mime_octetstream = "octet/stream";
-const char const *mime_audiomp3 = "audio/mp3";
-const char const *mime_audioflac = "audio/flac";
-const char const *mime_audioalac = "audio/alac";
-const char const *mime_audioaac = "audio/aac";
-const char const *mime_audiopcm = "audio/pcm";
-const char const mime_imagejpg[] = "image/jpg";
-const char const mime_imagepng[] = "image/png";
-const char const *mime_directory = "inode/directory";
+const char* const mime_octetstream = "octet/stream";
+const char* const mime_audiomp3 = "audio/mp3";
+const char* const mime_audioflac = "audio/flac";
+const char* const mime_audioalac = "audio/alac";
+const char* const mime_audioaac = "audio/aac";
+const char* const mime_audiopcm = "audio/pcm";
+const char* const mime_imagejpg = "image/jpg";
+const char* const mime_imagepng = "image/png";
+const char* const mime_directory = "inode/directory";
 
-const char const *str_title = "title";
-const char const *str_artist = "artist";
-const char const *str_album = "album";
-const char const *str_track = "track";
-const char const *str_year = "year";
-const char const *str_genre = "genre";
-const char const *str_date = "date";
-const char const *str_comment = "comment";
-const char const *str_cover = "cover";
-const char const *str_regain = "replaygain";
-const char const *str_duration = "duration";
-const char const *str_likes = "likes";
+const char* const str_title = "title";
+const char* const str_artist = "artist";
+const char* const str_album = "album";
+const char* const str_track = "track";
+const char* const str_year = "year";
+const char* const str_genre = "genre";
+const char* const str_date = "date";
+const char* const str_comment = "comment";
+const char* const str_cover = "cover";
+const char* const str_regain = "replaygain";
+const char* const str_duration = "duration";
+const char* const str_likes = "likes";
 
 void utils_srandom()
 {

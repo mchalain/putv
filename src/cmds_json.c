@@ -99,10 +99,10 @@ struct cmds_ctx_s
 
 static struct jsonrpc_method_entry_t method_table[];
 
-static const char const *str_stop = "stop";
-static const char const *str_play = "play";
-static const char const *str_pause = "pause";
-static const char const *str_next = "next";
+static const char * const str_stop = "stop";
+static const char * const str_play = "play";
+static const char * const str_pause = "pause";
+static const char * const str_next = "next";
 
 static int _print_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)

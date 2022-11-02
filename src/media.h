@@ -6,25 +6,25 @@
 typedef struct player_ctx_s player_ctx_t;
 #include "jitter.h"
 
-extern const char const *mime_octetstream;
-extern const char const *mime_audiomp3;
-extern const char const *mime_audioflac;
-extern const char const *mime_audioalac;
-extern const char const *mime_audioaac;
-extern const char const *mime_audiopcm;
-extern const char const *mime_directory;
+extern const char* const mime_octetstream;
+extern const char* const mime_audiomp3;
+extern const char* const mime_audioflac;
+extern const char* const mime_audioalac;
+extern const char* const mime_audioaac;
+extern const char* const mime_audiopcm;
+extern const char* const mime_directory;
 
-extern const char const *str_title;
-extern const char const *str_artist;
-extern const char const *str_album;
-extern const char const *str_track;
-extern const char const *str_year;
-extern const char const *str_genre;
-extern const char const *str_date;
-extern const char const *str_regain;
-extern const char const *str_comment;
-extern const char const *str_cover;
-extern const char const *str_likes;
+extern const char* const str_title;
+extern const char* const str_artist;
+extern const char* const str_album;
+extern const char* const str_track;
+extern const char* const str_year;
+extern const char* const str_genre;
+extern const char* const str_date;
+extern const char* const str_regain;
+extern const char* const str_comment;
+extern const char* const str_cover;
+extern const char* const str_likes;
 
 void utils_srandom();
 const char *utils_getmime(const char *path);

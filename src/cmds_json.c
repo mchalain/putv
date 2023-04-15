@@ -1374,6 +1374,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		fsync(sock);
 		free(message);
 		json_decref(notification);
+		usleep(100000);
 	}
 	else
 	{
@@ -1381,7 +1382,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 	}
 	if (ret < 0)
 	{
-		err("cmd: json send error %s", strerror(errno));
+		err("cmd: json send on %d error \"%s\"", info->sock, strerror(errno));
 		if (errno == EAGAIN)
 			ret = 0;
 	}
@@ -1405,12 +1406,13 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
 		free(buff);
+		json_decref(response);
+		usleep(100000);
 	}
 	else
 	{
 		err("cmds: no response for %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 	}
-	json_decref(response);
 	return ret;
 }
 

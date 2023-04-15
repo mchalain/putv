@@ -437,6 +437,7 @@ int main(int argc, char **argv)
 	int nbinputs = 0;
 
 	int opt;
+	int fd;
 	do
 	{
 		opt = getopt(argc, argv, "R:n:i:m:hDp:L:");
@@ -449,7 +450,9 @@ int main(int argc, char **argv)
 				data.name = optarg;
 			break;
 			case 'i':
-				data.inputfd[nbinputs++] = open(optarg, O_RDONLY);
+				fd = open(optarg, O_RDONLY);
+				if (fd > 0)
+					data.inputfd[nbinputs++] = fd;
 			break;
 			case 'm':
 				media_path = optarg;

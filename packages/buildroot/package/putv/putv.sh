@@ -51,6 +51,11 @@ start() {
 	if [ "${OUTPUT}" != "" ]; then
 		OPTIONS="${OPTIONS} -o ${OUTPUT}"
 	fi
+	mkdir -p /tmp/run/wesocket
+	if [ ! -e ${WEBSOCKETDIR} ]; then
+		ln -s /tmp/run/wesocket ${WEBSOCKETDIR}
+	fi
+	rm -f ${WEBSOCKETDIR}/${WEBSOCKETNAME}
 
 	if [ -e /etc/gpiod/rules.d/putv.conf ] && [ -z "$GPIO" ]; then
 		exit 0

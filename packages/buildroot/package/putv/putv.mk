@@ -85,7 +85,9 @@ endif
 
 ifeq ($(BR2_PACKAGE_PUTV_WEBAPP),y)
 define PUTV_WEBAPP_INSTALL_TARGET_CMDS
-	ln -sf /media $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/
+	rm -rf $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/media
+	ln -sf /media $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/media
+	ln -sf /tmp/run/websocket $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/websocket
 endef
 else
 PUTV_WEBAPP_INSTALL_TARGET_CMDS=

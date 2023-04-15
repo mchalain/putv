@@ -28,6 +28,8 @@
 #ifndef __CLIENT_JSON_H__
 #define __CLIENT_JSON_H__
 
+#define CLIENT_ERROR -1
+#define CLIENT_WAITING -2
 
 typedef int (*client_event_prototype_t)(void *data, json_t *params);
 typedef struct client_event_s client_event_t;

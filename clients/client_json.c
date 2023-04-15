@@ -71,7 +71,7 @@ static int answer_proto(client_data_t * data, json_t *json_params)
 	client_event_prototype_t func;
 	void *funcdata;
 	if (data->run == 0)
-		return -1;
+		return CLIENT_ERROR;
 
 	pthread_mutex_lock(&data->mutex);
 	data->pid = 0;
@@ -219,7 +219,7 @@ int client_unix(const char *socketpath, client_data_t *data)
 			close(sock);
 			sock = 0;
 			err("client: connect error %s", strerror(errno));
-			return -1;
+			return CLIENT_ERROR;
 		}
 		data->sock = sock;
 		pthread_cond_init(&data->cond, NULL);
@@ -252,7 +252,7 @@ unsigned long int client_cmd(client_data_t *data, const char * cmd)
 	if (ret < 0)
 	{
 		err("jsonrpc: send error %s", strerror(errno));
-		return -1;
+		return CLIENT_ERROR;
 	}
 	if (data->options & OPTION_ASYNC)
 		return 0;
@@ -278,11 +278,11 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 		if (data->retry < MAX_RETRIES)
 		{
 			data->retry++;
-			return -1;
+			return CLIENT_WAITING;
 		}
 		data->pid = 0;
 		data->retry = 0;
-		return -2;
+		return CLIENT_ERROR;
 	}
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
@@ -292,7 +292,7 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 	if (pid == -1)
 	{
 		pthread_mutex_unlock(&data->mutex);
-		return -1;
+		return CLIENT_ERROR;
 	}
 	int ret = client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
@@ -452,7 +452,7 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 			err("client: connection error %s", strerror(errno));
 			strcpy(buffer, "{}");
 			client_disconnect(data);
-			return -1;
+			return CLIENT_ERROR;
 		}
 	}
 	else
@@ -494,7 +494,7 @@ json_t *client_error_response(json_t *json_id, json_t *json_error, void *arg)
 
 int client_loop(client_data_t *data)
 {
-	int ret = -1;
+	int ret = CLIENT_ERROR;
 	client_event_t *event = data->events;
 	while (event)
 	{
@@ -528,7 +528,7 @@ int client_loop(client_data_t *data)
 					err("client: receive mal formated json %s", error.text);
 					data->pid = -1;
 					data->run = 0;
-					ret = -1;
+					ret = CLIENT_ERROR;
 				}
 			} while (data->message != NULL);
 #else

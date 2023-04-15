@@ -864,6 +864,8 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 		ret = method(ctx, arg);
 		if (ret == 0)
 			strcpy(history, start);
+		else
+			return ret;
 	}
 	else
 		fprintf(termout, " command not found\n");
@@ -872,9 +874,9 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 
 int run_shell(ctx_t *ctx)
 {
+	int ret = 0;
 	do
 	{
-		int ret;
 		fd_set rfds;
 		struct timeval timeout = {1, 0};
 		struct timeval *ptimeout = NULL;
@@ -926,6 +928,10 @@ int run_shell(ctx_t *ctx)
 					offset += ret;
 					length -= ret;
 				}
+				else if (ret == CLIENT_WAITING)
+					sleep(1);
+				else
+					ctx->run = 0;
 			}
 		}
 	} while (ctx->run);
@@ -934,7 +940,7 @@ int run_shell(ctx_t *ctx)
 		sleep(1); // wait that the last request is treated otherwise the connection closing too fast
 		client_disconnect(ctx->client);
 	}
-	return 0;
+	return ret;
 }
 
 int run_client(void *arg)
@@ -1101,9 +1107,12 @@ int main(int argc, char **argv)
 #else
 	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
-	dbg("cmdline: new shell");
-	run_shell(&data);
-	dbg("cmdline: end shell");
+	int ret;
+	do {
+		dbg("cmdline: new shell");
+		ret = run_shell(&data);
+		dbg("cmdline: end shell");
+	} while (ret < 0);
 
 	pthread_join(thread, NULL);
 

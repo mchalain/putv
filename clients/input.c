@@ -327,7 +327,7 @@ static int run(input_ctx_t *ctx)
 			if (ret == -4)
 				ret = 0;
 		}
-		if (ret < 0)
+		if (ret < 0 && ret != CLIENT_WAITING)
 		{
 			err("input: client error %s", strerror(errno));
 			break;

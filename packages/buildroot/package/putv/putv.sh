@@ -6,6 +6,7 @@
 BINDIR="/usr/bin/"
 DAEMON="putv"
 PIDFILE="/var/run/$DAEMON.pid"
+WEBAPPDIR="/srv/www-putv"
 WEBSOCKETDIR="/var/run/websocket"
 WEBSOCKETNAME=$DAEMON
 LOGFILE="/var/log/$DAEMON.log"
@@ -40,6 +41,7 @@ start() {
 	fi
 	OPTIONS="${OPTIONS} -R ${WEBSOCKETDIR}"
 	OPTIONS="${OPTIONS} -n ${WEBSOCKETNAME}"
+	OPTIONS="${OPTIONS} -d ${WEBAPPDIR}"
 	if [ "${USER}" != "" ]; then
 		OPTIONS="${OPTIONS} -u ${USER}"
 	fi

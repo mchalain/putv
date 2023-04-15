@@ -6,7 +6,7 @@
 BINDIR="/usr/bin/"
 DAEMON="putv"
 PIDFILE="/var/run/$DAEMON.pid"
-WEBAPPDIR="/srv/www-putv"
+WEBAPPDIR="/srv/www-putv/htdocs"
 WEBSOCKETDIR="/var/run/websocket"
 WEBSOCKETNAME=$DAEMON
 LOGFILE="/var/log/$DAEMON.log"
@@ -41,7 +41,9 @@ start() {
 	fi
 	OPTIONS="${OPTIONS} -R ${WEBSOCKETDIR}"
 	OPTIONS="${OPTIONS} -n ${WEBSOCKETNAME}"
-	OPTIONS="${OPTIONS} -d ${WEBAPPDIR}"
+	if [ -d ${WEBAPPDIR} ]; then
+		OPTIONS="${OPTIONS} -d ${WEBAPPDIR}"
+	fi
 	if [ "${USER}" != "" ]; then
 		OPTIONS="${OPTIONS} -u ${USER}"
 	fi
@@ -71,6 +73,7 @@ start() {
 	else
 		echo "FAIL"
 	fi
+	chmod a+rwx ${WEBSOCKETDIR}
 	return "$status"
 }
 

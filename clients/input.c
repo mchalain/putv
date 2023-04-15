@@ -142,10 +142,10 @@ static int input_checkstate(void *data, json_t *params)
 static int input_parseevent_rel(input_ctx_t *ctx, const struct input_event *event)
 {
 	if (event->type != EV_REL)
-		return -2;
+		return -4;
 
 	if (event->code != REL_HWHEEL)
-		return -1;
+		return -4;
 	dbg("rel: %d", event->value);
 
 	int ret = -1;
@@ -158,7 +158,7 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 {
 	if (event->type != EV_KEY)
 	{
-		return -2;
+		return -4;
 	}
 	if (event->value != 0) // check only keyrelease event
 	{
@@ -322,9 +322,9 @@ static int run(input_ctx_t *ctx)
 		if (ret > 0 && ctx->client != NULL)
 		{
 			ret = input_parseevent_key(ctx, &event);
-			if (ret == -2)
+			if (ret == -4)
 				ret = input_parseevent_rel(ctx, &event);
-			if (ret == -2)
+			if (ret == -4)
 				ret = 0;
 		}
 		if (ret < 0)

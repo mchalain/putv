@@ -345,7 +345,11 @@ static int run_client(void *arg)
 	input_ctx_t *ctx = (input_ctx_t *)arg;
 
 	client_data_t data = {0};
-	client_unix(ctx->socketpath, &data);
+	if (client_unix(ctx->socketpath, &data) < 0)
+	{
+		warn("input: server not ready");
+		return -1;
+	}
 	client_async(&data, 1);
 	client_eventlistener(&data, "onchange", input_checkstate, ctx);
 	ctx->client = &data;
@@ -374,7 +378,11 @@ static void *_check_socket(void *arg)
 		if (!access(ctx->socketpath, R_OK | W_OK))
 		{
 			if (run_client((void *)ctx) < 0)
-				unlink(ctx->socketpath);
+			{
+				// wait and retry
+				sleep(1);
+				continue;
+			}
 		}
 
 		char buffer[BUF_LEN];

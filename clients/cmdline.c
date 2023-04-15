@@ -989,7 +989,12 @@ static void *_check_socket(void *arg)
 	{
 		if (!access(ctx->socketpath, R_OK | W_OK))
 		{
-			run_client((void *)ctx);
+			if (run_client((void *)ctx) < 0)
+			{
+				// wait and retry
+				sleep(1);
+				continue;
+			}
 			if (! ctx->run)
 				break;
 		}
@@ -1001,6 +1006,7 @@ static void *_check_socket(void *arg)
 		if (length < 0)
 		{
 			err("read");
+			sleep(1);
 			continue;
 		}
 

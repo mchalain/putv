@@ -772,7 +772,6 @@ static int printevent(ctx_t *ctx, json_t *json_params)
 	int id = -1;
 	if (json_is_number(jid))
 		id = json_integer_value(jid);
-	warn("cmdline: data from server");
 
 	json_t *jstate = json_object_get(json_params, "state");
 	if (json_is_string(jstate))
@@ -881,7 +880,6 @@ int run_shell(ctx_t *ctx)
 		struct timeval *ptimeout = NULL;
 
 		pthread_mutex_lock(&ctx->mutex);
-		warn("RUN %d", ctx->run);
 		while (ctx->client == NULL && ctx->run < 2)
 		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
@@ -907,7 +905,7 @@ int run_shell(ctx_t *ctx)
 			length = read(ctx->inputfd, buffer, length);
 			if (length == 0)
 			{
-				warn("cmdline: end of script");
+				dbg("cmdline: end of script");
 				ctx->run = 0;
 			}
 			if (length < 0)
@@ -944,10 +942,10 @@ int run_client(void *arg)
 	ctx_t *ctx = (ctx_t *)arg;
 
 	client_data_t data = {0};
-	warn("cmdline: open socket %s", ctx->socketpath);
+	dbg("cmdline: open socket %s", ctx->socketpath);
 	if (client_unix(ctx->socketpath, &data) < 0)
 	{
-		warn("cmdline: bad socket");
+		warn("cmdline: server not ready");
 		return -1;
 	}
 	if (ctx->inputfd)

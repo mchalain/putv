@@ -41,6 +41,7 @@ struct client_data_s
 	int messagelen;
 	json_t*params;
 	unsigned long int pid;
+	unsigned int retry;
 	client_event_prototype_t proto;
 	void *data;
 	int result;

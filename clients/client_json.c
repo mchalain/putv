@@ -275,6 +275,13 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 	if (data->pid > 0)
 	{
 		warn("client: request %lu waiting", data->pid);
+		if (data->retry < MAX_RETRIES)
+		{
+			data->retry++;
+			return -1;
+		}
+		data->pid = 0;
+		data->retry = 0;
 		return -2;
 	}
 	pthread_mutex_lock(&data->mutex);

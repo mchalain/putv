@@ -13,6 +13,7 @@ typedef struct encoder_ops_s encoder_ops_t;
 struct encoder_ops_s
 {
 	encoder_ctx_t *(*init)(player_ctx_t *);
+	estream_t type;
 	jitter_t *(*jitter)(encoder_ctx_t *encoder);
 	int (*run)(encoder_ctx_t *, jitter_t *);
 	const char *(*mime)(encoder_ctx_t *);

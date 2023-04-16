@@ -85,6 +85,7 @@ static void encoder_destroy(encoder_ctx_t *encoder)
 const encoder_ops_t *encoder_passthrough = &(encoder_ops_t)
 {
 	.init = encoder_init,
+	.type = ES_AUDIO,
 	.jitter = encoder_jitter,
 	.run = encoder_run,
 	.mime = encoder_mime,

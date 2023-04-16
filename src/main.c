@@ -121,6 +121,35 @@ void help(const char *name)
 
 }
 
+static encoder_t *main_encoder(player_ctx_t *player, sink_t *sink)
+{
+	encoder_t *encoder = malloc(sizeof(*encoder));
+
+	/**
+	 * the sink must to run before to start the encoder
+	 */
+	sink->ops->run(sink->ctx);
+	// encoder initialization
+	encoder->ops = sink->ops->encoder(sink->ctx);
+	encoder->ctx = encoder->ops->init(player);
+	if (encoder->ctx == NULL)
+	{
+		err("encoder not found");
+		sink->ops->destroy(sink->ctx);
+		free(encoder);
+		return NULL;
+	}
+	// retreive an index of jitter for this kind of encoder
+	int index = sink->ops->attach(sink->ctx, encoder->ops->mime(encoder->ctx));
+	jitter_t *sink_jitter;
+	sink_jitter = sink->ops->jitter(sink->ctx, index);
+
+	// start encoder
+	encoder->ops->run(encoder->ctx, sink_jitter);
+
+	return encoder;
+}
+
 #define DAEMONIZE 0x01
 #define SRC_STDIN 0x02
 #define AUTOSTART 0x04
@@ -354,8 +383,6 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-	encoder_t encoder = {NULL, NULL};
-
 	sink_t *sink = NULL;
 
 	sink = sink_build(player, outarg);
@@ -365,28 +392,9 @@ int main(int argc, char **argv)
 		err("output not set");
 		goto end;
 	}
-
-	/**
-	 * the sink must to run before to start the encoder
-	 */
-	sink->ops->run(sink->ctx);
-	// encoder initialization
-	encoder.ops = sink->ops->encoder(sink->ctx);
-	encoder.ctx = encoder.ops->init(player);
-	if (encoder.ctx == NULL)
-	{
-		err("encoder not found");
-		goto end;
-	}
-	// retreive an index of jitter for this kind of encoder
-	int index = sink->ops->attach(sink->ctx, encoder.ops->mime(encoder.ctx));
-	jitter_t *sink_jitter;
-	sink_jitter = sink->ops->jitter(sink->ctx, index);
-
-	// start encoder
+	encoder_t *encoder = main_encoder(player, sink);
 	jitter_t *encoder_jitter = NULL;
-	encoder.ops->run(encoder.ctx, sink_jitter);
-	encoder_jitter = encoder.ops->jitter(encoder.ctx);
+	encoder_jitter = encoder->ops->jitter(encoder->ctx);
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
@@ -403,7 +411,7 @@ int main(int argc, char **argv)
 		err("main: start server as root");
 
 	if (encoder_jitter != NULL)
-		player_subscribe(player, ES_AUDIO, encoder_jitter);
+		player_subscribe(player, encoder->ops->type, encoder_jitter);
 
 	if (mode & AUTOSTART)
 	{
@@ -429,7 +437,7 @@ int main(int argc, char **argv)
 
 	ret = player_run(player);
 
-	encoder.ops->destroy(encoder.ctx);
+	encoder->ops->destroy(encoder->ctx);
 	sink->ops->destroy(sink->ctx);
 	player_destroy(player);
 

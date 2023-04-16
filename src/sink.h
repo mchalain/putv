@@ -3,7 +3,7 @@
 
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
-typedef struct encoder_s encoder_t;
+typedef struct encoder_ops_s encoder_ops_t;
 
 #ifndef SINK_CTX
 typedef void sink_ctx_t;
@@ -19,7 +19,7 @@ struct sink_ops_s
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);
 	const char *(*service)(sink_ctx_t *, int *port, const char **txt[]);
-	const encoder_t *(*encoder)(sink_ctx_t *);
+	const encoder_ops_t *(*encoder)(sink_ctx_t *);
 	void (*eventlistener)(sink_ctx_t *ctx, event_listener_cb_t listener, void *arg);
 
 	/**

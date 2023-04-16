@@ -160,7 +160,7 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 	return NULL;
 }
 
-static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+static const encoder_ops_t *sink_encoder(sink_ctx_t *ctx)
 {
 	return ENCODER;
 }

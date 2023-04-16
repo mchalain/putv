@@ -39,9 +39,9 @@
 #define dbg(...)
 #endif
 
-const encoder_t *encoder_check(const char *path)
+const encoder_ops_t *encoder_check(const char *path)
 {
-	const encoder_t *encoder = ENCODER;
+	const encoder_ops_t *encoder = ENCODER;
 	const char *pathend = strchr(path, '?');
 	if (pathend == NULL)
 		pathend = strchr(path, '&');

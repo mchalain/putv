@@ -42,11 +42,11 @@
 #include "heartbeat.h"
 #include "media.h"
 
-typedef struct encoder_s encoder_t;
+typedef struct encoder_ops_s encoder_ops_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
 {
-	const encoder_t *ops;
+	const encoder_ops_t *ops;
 	lame_global_flags *encoder;
 	unsigned int samplerate;
 	unsigned char nchannels;
@@ -317,7 +317,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const encoder_t *encoder_lame = &(encoder_t)
+const encoder_ops_t *encoder_lame = &(encoder_ops_t)
 {
 	.init = encoder_init,
 	.jitter = encoder_jitter,

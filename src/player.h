@@ -31,7 +31,6 @@ typedef enum
 typedef struct jitter_s jitter_t;
 typedef struct src_s src_t;
 typedef struct decoder_s decoder_t;
-typedef struct encoder_s encoder_t;
 typedef struct sink_s sink_t;
 typedef struct media_s media_t;
 typedef struct filter_s filter_t;

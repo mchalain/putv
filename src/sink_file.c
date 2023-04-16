@@ -44,7 +44,7 @@ struct sink_ctx_s
 	jitter_t *in;
 	event_listener_t *listener;
 
-	const encoder_t *encoder;
+	const encoder_ops_t *encoder;
 	int fd;
 };
 #define SINK_CTX
@@ -123,7 +123,7 @@ static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 	return 0;
 }
 
-static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+static const encoder_ops_t *sink_encoder(sink_ctx_t *ctx)
 {
 	return ctx->encoder;
 }

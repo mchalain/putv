@@ -71,7 +71,7 @@ struct sink_ctx_s
 #ifdef MUX
 	mux_t *mux;
 #endif
-	const encoder_t *encoder;
+	const encoder_ops_t *encoder;
 #ifdef UDP_DUMP
 	int dumpfd;
 #endif
@@ -97,7 +97,7 @@ static const char *jitter_name = "udp socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int ret = 0;
-	const encoder_t *encoder = encoder_lame;
+	const encoder_ops_t *encoder = encoder_lame;
 
 	char *protocol = NULL;
 	char *host = NULL;
@@ -316,7 +316,7 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 #endif
 }
 
-static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+static const encoder_ops_t *sink_encoder(sink_ctx_t *ctx)
 {
 	return ctx->encoder;
 }

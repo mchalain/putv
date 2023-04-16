@@ -369,7 +369,7 @@ int main(int argc, char **argv)
 	 */
 	sink->ops->run(sink->ctx);
 	// encoder initialization
-	const encoder_t *encoder;
+	const encoder_ops_t *encoder;
 	encoder = sink->ops->encoder(sink->ctx);
 	encoder_ctx_t *encoder_ctx;
 	encoder_ctx = encoder->init(player);

@@ -32,11 +32,11 @@
 #include <stdlib.h>
 
 #include "player.h"
-typedef struct encoder_s encoder_t;
+typedef struct encoder_ops_s encoder_ops_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
 {
-	const encoder_t *ops;
+	const encoder_ops_t *ops;
 	player_ctx_t *ctx;
 	jitter_t *inout;
 };
@@ -82,7 +82,7 @@ static void encoder_destroy(encoder_ctx_t *encoder)
 	free(encoder);
 }
 
-const encoder_t *encoder_passthrough = &(encoder_t)
+const encoder_ops_t *encoder_passthrough = &(encoder_ops_t)
 {
 	.init = encoder_init,
 	.jitter = encoder_jitter,

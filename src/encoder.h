@@ -9,8 +9,8 @@ typedef enum jitter_format_e jitter_format_t;
 #ifndef ENCODER_CTX
 typedef void encoder_ctx_t;
 #endif
-typedef struct encoder_s encoder_t;
-struct encoder_s
+typedef struct encoder_ops_s encoder_ops_t;
+struct encoder_ops_s
 {
 	encoder_ctx_t *(*init)(player_ctx_t *);
 	jitter_t *(*jitter)(encoder_ctx_t *encoder);
@@ -21,9 +21,9 @@ struct encoder_s
 	void (*destroy)(encoder_ctx_t *);
 };
 
-const encoder_t *encoder_check(const char *path);
+const encoder_ops_t *encoder_check(const char *path);
 
-extern const encoder_t *encoder_passthrough;
-extern const encoder_t *encoder_lame;
-extern const encoder_t *encoder_flac;
+extern const encoder_ops_t *encoder_passthrough;
+extern const encoder_ops_t *encoder_lame;
+extern const encoder_ops_t *encoder_flac;
 #endif

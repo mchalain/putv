@@ -53,6 +53,7 @@
 #define player_dbg dbg
 
 static void _player_autonext(void *arg, event_t event, void *eventarg);
+static void _player_sendevent(player_ctx_t *ctx, event_t event, void *data);
 
 struct player_ctx_s
 {
@@ -110,7 +111,7 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 				.state = ctx->state,
 				.mediapath = mediapath,
 		};
-		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
+		_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 	}
 	if (ctx->media)
 	{
@@ -515,7 +516,7 @@ int player_run(player_ctx_t *ctx)
 				.state = ctx->state,
 				.mediapath = NULL,
 		};
-		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
+		_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 
 		if (last_state != (new_state & ~STATE_PAUSE_MASK))
 		{
@@ -527,7 +528,7 @@ int player_run(player_ctx_t *ctx)
 	return 0;
 }
 
-void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
+static void _player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 {
 	event_listener_t *it = ctx->listeners;
 	while (it != NULL)

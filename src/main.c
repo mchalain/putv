@@ -301,8 +301,6 @@ int main(int argc, char **argv)
 	nbcmds++;
 #endif
 
-	sink = sink_build(player, outarg);
-
 	if (!(mode & DAEMONIZE))
 	{
 #ifdef CMDLINE
@@ -358,19 +356,7 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-	if (setegid(pw_gid))
-		err("main: change group %s", strerror(errno));
-	if (seteuid(pw_uid))
-		err("main: start server as root");
-
-	int i;
-	for (i = 0; i < nbcmds; i++)
-	{
-		if(cmds[i].ctx != NULL)
-		{
-			cmds[i].ops->run(cmds[i].ctx, sink);
-		}
-	}
+	sink = sink_build(player, outarg);
 
 	if (sink == NULL)
 	{
@@ -401,6 +387,20 @@ int main(int argc, char **argv)
 	jitter_t *encoder_jitter = NULL;
 	encoder->run(encoder_ctx, sink_jitter);
 	encoder_jitter = encoder->jitter(encoder_ctx);
+
+	if (setegid(pw_gid))
+		err("main: change group %s", strerror(errno));
+	if (seteuid(pw_uid))
+		err("main: start server as root");
+
+	int i;
+	for (i = 0; i < nbcmds; i++)
+	{
+		if(cmds[i].ctx != NULL)
+		{
+			cmds[i].ops->run(cmds[i].ctx, sink);
+		}
+	}
 
 	if (encoder_jitter != NULL)
 		player_subscribe(player, ES_AUDIO, encoder_jitter);

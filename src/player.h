@@ -31,6 +31,7 @@ typedef enum
 typedef struct jitter_s jitter_t;
 typedef struct src_s src_t;
 typedef struct decoder_s decoder_t;
+typedef struct encoder_s encoder_t;
 typedef struct sink_s sink_t;
 typedef struct media_s media_t;
 typedef struct filter_s filter_t;
@@ -40,7 +41,7 @@ typedef struct player_ctx_s player_ctx_t;
 player_ctx_t *player_init();
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now);
 media_t *player_media(player_ctx_t *ctx);
-int player_subscribe(player_ctx_t *userdata, estream_t type, jitter_t *encoder_jitter);
+int player_subscribe(player_ctx_t *userdata, encoder_t *encoder);
 int player_run(player_ctx_t *userdata);
 void player_destroy(player_ctx_t *ctx);
 int player_waiton(player_ctx_t *ctx, int state);

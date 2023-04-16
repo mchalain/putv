@@ -1,7 +1,8 @@
 #ifndef __ENCODER_H__
 #define __ENCODER_H__
 
-typedef struct player_ctx_s player_ctx_t;
+#include "player.h"
+
 typedef struct jitter_s jitter_t;
 typedef struct sink_s sink_t;
 typedef enum jitter_format_e jitter_format_t;

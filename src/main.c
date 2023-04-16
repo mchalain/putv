@@ -393,8 +393,6 @@ int main(int argc, char **argv)
 		goto end;
 	}
 	encoder_t *encoder = main_encoder(player, sink);
-	jitter_t *encoder_jitter = NULL;
-	encoder_jitter = encoder->ops->jitter(encoder->ctx);
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
@@ -410,8 +408,7 @@ int main(int argc, char **argv)
 	if (seteuid(pw_uid))
 		err("main: start server as root");
 
-	if (encoder_jitter != NULL)
-		player_subscribe(player, encoder->ops->type, encoder_jitter);
+	player_subscribe(player, encoder);
 
 	if (mode & AUTOSTART)
 	{

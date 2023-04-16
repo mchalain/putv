@@ -381,10 +381,12 @@ int player_play(player_ctx_t *ctx, int id)
 	return ret;
 }
 
-int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter)
+int player_subscribe(player_ctx_t *ctx, encoder_t *encoder)
 {
-	if (type == ES_AUDIO)
+	if (encoder->ops->type == ES_AUDIO)
 	{
+		jitter_t *encoder_jitter = NULL;
+		encoder_jitter = encoder->ops->jitter(encoder->ctx);
 		ctx->outstream[ctx->noutstreams] = encoder_jitter;
 		ctx->noutstreams++;
 	}

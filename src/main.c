@@ -285,8 +285,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sink_t *sink = NULL;
-
 	/**
 	 * cmds_json must be initialize as soon as possible.
 	 * Other applications mays needs it "immediatly"
@@ -356,6 +354,10 @@ int main(int argc, char **argv)
 #endif
 #endif
 
+	encoder_t encoder = {NULL, NULL};
+
+	sink_t *sink = NULL;
+
 	sink = sink_build(player, outarg);
 
 	if (sink == NULL)
@@ -369,29 +371,22 @@ int main(int argc, char **argv)
 	 */
 	sink->ops->run(sink->ctx);
 	// encoder initialization
-	const encoder_ops_t *encoder;
-	encoder = sink->ops->encoder(sink->ctx);
-	encoder_ctx_t *encoder_ctx;
-	encoder_ctx = encoder->init(player);
-	if (encoder_ctx == NULL)
+	encoder.ops = sink->ops->encoder(sink->ctx);
+	encoder.ctx = encoder.ops->init(player);
+	if (encoder.ctx == NULL)
 	{
 		err("encoder not found");
 		goto end;
 	}
 	// retreive an index of jitter for this kind of encoder
-	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
+	int index = sink->ops->attach(sink->ctx, encoder.ops->mime(encoder.ctx));
 	jitter_t *sink_jitter;
 	sink_jitter = sink->ops->jitter(sink->ctx, index);
 
 	// start encoder
 	jitter_t *encoder_jitter = NULL;
-	encoder->run(encoder_ctx, sink_jitter);
-	encoder_jitter = encoder->jitter(encoder_ctx);
-
-	if (setegid(pw_gid))
-		err("main: change group %s", strerror(errno));
-	if (seteuid(pw_uid))
-		err("main: start server as root");
+	encoder.ops->run(encoder.ctx, sink_jitter);
+	encoder_jitter = encoder.ops->jitter(encoder.ctx);
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
@@ -401,6 +396,11 @@ int main(int argc, char **argv)
 			cmds[i].ops->run(cmds[i].ctx, sink);
 		}
 	}
+
+	if (setegid(pw_gid))
+		err("main: change group %s", strerror(errno));
+	if (seteuid(pw_uid))
+		err("main: start server as root");
 
 	if (encoder_jitter != NULL)
 		player_subscribe(player, ES_AUDIO, encoder_jitter);
@@ -429,7 +429,7 @@ int main(int argc, char **argv)
 
 	ret = player_run(player);
 
-	encoder->destroy(encoder_ctx);
+	encoder.ops->destroy(encoder.ctx);
 	sink->ops->destroy(sink->ctx);
 	player_destroy(player);
 

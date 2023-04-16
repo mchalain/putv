@@ -21,6 +21,13 @@ struct encoder_ops_s
 	void (*destroy)(encoder_ctx_t *);
 };
 
+typedef struct encoder_s encoder_t;
+struct encoder_s
+{
+	const encoder_ops_t *ops;
+	encoder_ctx_t *ctx;
+};
+
 const encoder_ops_t *encoder_check(const char *path);
 
 extern const encoder_ops_t *encoder_passthrough;

@@ -836,9 +836,9 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	json_object_set(*result, "state", json_state);
 
-	if (ctx->sink && ctx->sink->ops->getvolume != NULL && (ctx->onchangemask & ONCHANGE_VOLUME))
+	unsigned int volume = player_volume(ctx->player, -1);
+	if (volume > -1 && (ctx->onchangemask & ONCHANGE_VOLUME))
 	{
-		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
 	}
 	return 0;
@@ -904,44 +904,34 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret = -1;
 
-	if (ctx->sink == NULL || ctx->sink->ops->getvolume == NULL)
+	int volume = player_volume(ctx->player, -1);
+	if (volume == -1)
 	{
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
 	}
 	json_t *value = NULL;
-	unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "level");
 		if (value && json_is_integer(value))
 		{
-			if (ctx->sink->ops->setvolume == NULL)
-			{
-				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
-				return -1;
-			}
-			int volume = json_boolean_value(value);
+			volume = json_integer_value(value);
 			if (volume > 100)
 				volume = 100;
 			if (volume < 0)
 				volume = 0;
-			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+			volume = player_volume(ctx->player, volume);
 		}
 		value = json_object_get(json_params, "step");
 		if (value && json_is_integer(value))
 		{
-			if (ctx->sink->ops->setvolume == NULL)
-			{
-				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
-				return -1;
-			}
 			volume += json_integer_value(value);
 			if (volume > 100)
 				volume = 100;
 			if (volume < 0)
 				volume = 0;
-			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+			volume = player_volume(ctx->player, volume);
 		}
 	}
 	*result = json_object();
@@ -1128,7 +1118,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
+	if (player_volume(ctx->player, -1) > -1)
 	{
 		action = json_object();
 		value = json_string("volume");
@@ -1338,6 +1328,7 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 	switch (event)
 	{
 		case PLAYER_EVENT_CHANGE:
+		{
 			pthread_mutex_lock(&ctx->mutex);
 			event_player_state_t *eventval = (event_player_state_t *)eventarg;
 			if (eventval->state != STATE_CHANGE)
@@ -1347,13 +1338,20 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 			pthread_mutex_unlock(&ctx->mutex);
 			if (eventval->state != STATE_CHANGE)
 				pthread_cond_broadcast(&ctx->cond);
+		}
 		break;
-		case SINK_EVENT_VOLUME:
-			pthread_mutex_lock(&ctx->mutex);
-			ctx->onchangemask |= ONCHANGE_VOLUME;
-			ctx->eventsmask |= ONCHANGE;
-			pthread_mutex_unlock(&ctx->mutex);
-			pthread_cond_broadcast(&ctx->cond);
+		case PLAYER_EVENT_VOLUME:
+		{
+			event_player_volume_t *eventval = (event_player_volume_t *)eventarg;
+			if (eventval->changed)
+			{
+				pthread_mutex_lock(&ctx->mutex);
+				ctx->onchangemask |= ONCHANGE_VOLUME;
+				ctx->eventsmask |= ONCHANGE;
+				pthread_mutex_unlock(&ctx->mutex);
+				pthread_cond_broadcast(&ctx->cond);
+			}
+		}
 		break;
 	}
 }
@@ -1624,12 +1622,8 @@ static void *_cmds_json_pthreadrecv(void *arg)
 	return NULL;
 }
 
-static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
+static int cmds_json_run(cmds_ctx_t *ctx)
 {
-	ctx->sink = sink;
-	if (sink->ops->eventlistener)
-		sink->ops->eventlistener(sink->ctx, jsonrpc_onchange, (void *)ctx);
-
 	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
 	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;

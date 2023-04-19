@@ -52,5 +52,6 @@ int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *
 int player_mediaid(player_ctx_t *ctx);
 src_t *player_source(player_ctx_t *ctx);
 int player_play(player_ctx_t *ctx, int id);
+int player_volume(player_ctx_t *ctx, int percent);
 
 #endif

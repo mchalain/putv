@@ -16,7 +16,9 @@ typedef enum event_e
 	SRC_EVENT_END_ES,
 	PLAYER_EVENT_CHANGE = 10,
 	PLAYER_EVENT_POSITION,
-	SINK_EVENT_VOLUME = 20,
+	PLAYER_EVENT_VOLUME,
+	SINK_EVENT_ENCODE_START = 20,
+	SINK_EVENT_ENCODE_END,
 } event_t;
 typedef struct event_new_es_s event_new_es_t;
 struct event_new_es_s
@@ -37,10 +39,19 @@ struct event_decode_es_s
 	decoder_t *decoder;
 };
 
-typedef struct event_sink_volume_s event_sink_volume_t;
-struct event_sink_volume_s
+typedef struct event_sink_state_s event_sink_state_t;
+struct event_sink_state_s
 {
 	sink_t *sink;
+	int state;
+};
+
+typedef struct event_player_volume_s event_player_volume_t;
+struct event_player_volume_s
+{
+	player_ctx_t *playerctx;
+	int volume;
+	int changed;
 };
 
 typedef struct event_player_state_s event_player_state_t;

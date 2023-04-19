@@ -262,15 +262,8 @@ static int method_next(cmds_ctx_t *ctx, const char *arg)
 
 static int method_volume(cmds_ctx_t *ctx, const char *arg)
 {
-	unsigned int volume = atoi(arg);
-	if (ctx->sink->ops->setvolume != NULL && volume != -1)
-	{
-		ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
-	}
-	if (ctx->sink->ops->getvolume != NULL)
-	{
-		volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
-	}
+	int volume = atoi(arg);
+	volume = player_volume(ctx->player, volume);
 	return volume;
 }
 

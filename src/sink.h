@@ -21,12 +21,6 @@ struct sink_ops_s
 	const char *(*service)(sink_ctx_t *, int *port, const char **txt[]);
 	const encoder_ops_t *(*encoder)(sink_ctx_t *);
 	void (*eventlistener)(sink_ctx_t *ctx, event_listener_cb_t listener, void *arg);
-
-	/**
-	 * control API
-	 */
-	void (*setvolume)(sink_ctx_t *ctx, unsigned int volume);
-	unsigned int (*getvolume)(sink_ctx_t *ctx);
 };
 
 typedef struct sink_s sink_t;

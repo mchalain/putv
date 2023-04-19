@@ -545,3 +545,14 @@ src_t *player_source(player_ctx_t *ctx)
 {
 	return ctx->src;
 }
+
+int player_volume(player_ctx_t *ctx, int percent)
+{
+	event_player_volume_t event = {
+			.playerctx = ctx,
+			.volume = percent,
+			.changed = 0,
+	};
+	_player_sendevent(ctx, PLAYER_EVENT_VOLUME, &event);
+	return event.volume;
+}

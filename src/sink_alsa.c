@@ -96,42 +96,25 @@ struct sink_ctx_s
 extern const sink_ops_t *sink_alsa;
 
 #ifdef SINK_ALSA_MIXER
-void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
+void _sink_volume_cb(void *arg, event_t event, void *data)
 {
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	event_player_volume_t *edata = (event_player_volume_t *)data;
+
 	if (ctx->mixerchannel == NULL)
 		return;
-	long min = 0, max = 0;
-	snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
-	if (volume > 100)
-		volume == 100;
-	long lvolume = volume * (max - min) / 100 + min;
-	snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, lvolume);
-	event_listener_t *listener = ctx->listener;
-	sink_t sink = {.ctx = ctx, .ops = sink_alsa};
-	event_sink_volume_t event = {.sink = &sink};
-	while (listener)
-	{
-		listener->cb(listener->arg, SINK_EVENT_VOLUME, (void *)&event);
-		listener = listener->next;
-	}
-}
-
-unsigned int _mixer_getvolume(sink_ctx_t *ctx)
-{
-	if (ctx->mixerchannel == NULL)
-		return 0;
 	long volume = 0;
 	long min = 0, max = 0;
-
 	snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
+	if (edata->volume > 0  && edata->volume < 100)
+	{
+		volume = edata->volume * (max - min) / 100 + min;
+		snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, volume);
+		edata->changed = 1;
+	}
 	snd_mixer_selem_get_playback_volume(ctx->mixerchannel, 0, &volume);
-
-	dbg("sink: alsa volume %ld < %ld < %ld", min, volume, max);
-	return (unsigned int) (volume - min) * 100 / (max - min);
+	edata->volume = (volume - min) * 100 / (max - min);
 }
-#else
-# define _mixer_setvolume NULL
-# define _mixer_getvolume NULL
 #endif
 
 typedef struct pcm_config_s
@@ -416,12 +399,14 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 		snd_mixer_selem_id_set_index(sid, 0);
 		snd_mixer_selem_id_set_name(sid, ctx->mixerch);
 		ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
-	}
-	if (ctx->mixerchannel == NULL)
-	{
-		warn("sink: alsa mixer not found %s", ctx->mixerch);
-		((sink_ops_t *)sink_alsa)->getvolume = NULL;
-		((sink_ops_t *)sink_alsa)->setvolume = NULL;
+		if (ctx->mixerchannel == NULL)
+		{
+			warn("sink: alsa mixer not found %s", ctx->mixerch);
+		}
+		else
+		{
+			player_eventlistener(player, _sink_volume_cb, ctx, "sink_alsa");
+		}
 	}
 #endif
 
@@ -648,26 +633,6 @@ static int alsa_run(sink_ctx_t *ctx)
 	return ret;
 }
 
-static void sink_eventlistener(sink_ctx_t *ctx, event_listener_cb_t cb, void *arg)
-{
-	event_listener_t *listener = calloc(1, sizeof(*listener));
-	listener->cb = cb;
-	listener->arg = arg;
-	if (ctx->listener == NULL)
-		ctx->listener = listener;
-	else
-	{
-		/**
-		 * add listener to the end of the list. this allow to call
-		 * a new listener with the current event when the function is
-		 * called from a callback
-		 */
-		event_listener_t *previous = ctx->listener;
-		while (previous->next != NULL) previous = previous->next;
-		previous->next = listener;
-	}
-}
-
 static void alsa_destroy(sink_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -693,11 +658,7 @@ const sink_ops_t *sink_alsa = &(sink_ops_t)
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,
-	.eventlistener = sink_eventlistener,
 	.encoder = sink_encoder,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
-
-	.getvolume = _mixer_getvolume,
-	.setvolume = _mixer_setvolume,
 };

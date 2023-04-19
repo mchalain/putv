@@ -394,21 +394,21 @@ int main(int argc, char **argv)
 	}
 	encoder_t *encoder = main_encoder(player, sink);
 
-	int i;
-	for (i = 0; i < nbcmds; i++)
-	{
-		if(cmds[i].ctx != NULL)
-		{
-			cmds[i].ops->run(cmds[i].ctx, sink);
-		}
-	}
-
 	if (setegid(pw_gid))
 		err("main: change group %s", strerror(errno));
 	if (seteuid(pw_uid))
 		err("main: start server as root");
 
 	player_subscribe(player, encoder);
+
+	int i;
+	for (i = 0; i < nbcmds; i++)
+	{
+		if(cmds[i].ctx != NULL)
+		{
+			cmds[i].ops->run(cmds[i].ctx);
+		}
+	}
 
 	if (mode & AUTOSTART)
 	{

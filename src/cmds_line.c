@@ -40,14 +40,12 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
-	sink_t *sink;
 	pthread_t thread;
 	int run;
 };
 #define CMDS_CTX
 #include "cmds.h"
 #include "media.h"
-#include "sink.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -449,9 +447,8 @@ static void *_cmds_line_pthread(void *arg)
 	return (void*)(intptr_t)ret;
 }
 
-static int cmds_line_run(cmds_ctx_t *ctx, sink_t *sink)
+static int cmds_line_run(cmds_ctx_t *ctx)
 {
-	ctx->sink = sink;
 	pthread_create(&ctx->thread, NULL, _cmds_line_pthread, (void *)ctx);
 
 	return 0;

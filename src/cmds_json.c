@@ -61,7 +61,6 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
-	sink_t *sink;
 	const char *socketpath;
 	pthread_t threadrecv;
 	pthread_t threadsend;
@@ -79,7 +78,6 @@ struct cmds_ctx_s
 #include "media.h"
 #include "decoder.h"
 #include "src.h"
-#include "sink.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)

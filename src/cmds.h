@@ -11,7 +11,7 @@ typedef struct cmds_ops_s cmds_ops_t;
 struct cmds_ops_s
 {
 	cmds_ctx_t *(*init)(player_ctx_t *, void *);
-	int (*run)(cmds_ctx_t *, sink_t *);
+	int (*run)(cmds_ctx_t *);
 	void (*destroy)(cmds_ctx_t *);
 };
 

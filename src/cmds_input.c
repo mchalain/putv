@@ -170,7 +170,7 @@ static void *_cmds_input_pthread(void *arg)
 	return (void*)ret;
 }
 
-static int cmds_input_run(cmds_ctx_t *ctx, sink_t *sink)
+static int cmds_input_run(cmds_ctx_t *ctx)
 {
 	dbg("input open %s", ctx->inputpath);
 	ctx->fd = open(ctx->inputpath, O_RDONLY);

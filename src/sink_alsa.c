@@ -314,6 +314,11 @@ static int _pcm_close(sink_ctx_t *ctx)
 	return 0;
 }
 
+static void _alsa_error(const char *file, int line, const char *function, int err, const char *fmt, ...)
+{
+	err("alsa: snd lib error (%d) %s %d into %s", err, file, line, function);
+}
+
 static const char *jitter_name = "alsa";
 static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 {
@@ -379,7 +384,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 		free(ctx);
 		return NULL;
 	}
-
+	snd_lib_error_set_handler(_alsa_error);
 	if (_pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize) < 0)
 	{
 		err("sink: init error %s", strerror(errno));

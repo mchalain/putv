@@ -137,12 +137,36 @@ static int _faad_output(decoder_ctx_t *ctx, NeAACDecFrameInfo *frameInfo, void *
 	return 0;
 }
 
-static int _faad_parsetags(char *buffer, size_t len)
+static int _faad_parsetags(decoder_ctx_t *ctx)
 {
-	size_t offset = 0;
-	uint32_t size;
-	size = uint32(buffer + offset);
-	offset += 4;
+	size_t len = 0;
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	if (!memcmp(ctx->inbuffer, "ID3", 3))
+	{
+		len = uint32(ctx->inbuffer + 6);
+		len += 10;
+	}
+	ctx->in->ops->pop(ctx->in->ctx, len);
+	return 0;
+}
+
+static int _faad_initaac(decoder_ctx_t *ctx)
+{
+	size_t len = ctx->in->ctx->size;
+
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	len = ctx->in->ops->length(ctx->in->ctx);
+	unsigned long samplerate;
+	unsigned char channels;
+	len = NeAACDecInit(ctx->decoder, ctx->inbuffer,
+		len, &samplerate, &channels);
+	if (len == -1)
+	{
+		err("decoder faad: Initialisation error");
+		return -1;
+	}
+	decoder_dbg("decoder faad: samplerate %lu fps, channels %d", samplerate, channels);
+	ctx->in->ops->pop(ctx->in->ctx, len);
 	return 0;
 }
 
@@ -151,38 +175,9 @@ static int _faad_loop(decoder_ctx_t *ctx)
 	int ret;
 	size_t len = ctx->in->ctx->size;
 
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-	len = 0;
-	if (!memcmp(ctx->inbuffer, "ID3", 3))
-	{
-		len = uint32(ctx->inbuffer + 6);
-		len += 10;
-	}
-	ctx->in->ops->pop(ctx->in->ctx, len);
-
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-	len = ctx->in->ops->length(ctx->in->ctx);
-	{
-		len = _faad_parsetags(ctx->inbuffer, len);
-	}
-	ctx->in->ops->pop(ctx->in->ctx, len);
-
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-	len = ctx->in->ops->length(ctx->in->ctx);
-	unsigned long samplerate;
-	unsigned char channels;
-	len = NeAACDecInit(ctx->decoder, ctx->inbuffer,
-		len, &samplerate, &channels);
-	if ((len + 1) == 0)
-	{
-		err("decoder faad: Initialisation error");
-		return -1;
-	}
-	decoder_dbg("decoder faad: samplerate %lu fps, channels %d", samplerate, channels);
-	ctx->in->ops->pop(ctx->in->ctx, len);
-
 	do
 	{
+		_faad_parsetags(ctx);
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (ctx->inbuffer == NULL)
 		{
@@ -192,7 +187,7 @@ static int _faad_loop(decoder_ctx_t *ctx)
 		}
 		len = ctx->in->ops->length(ctx->in->ctx);
 
-		NeAACDecFrameInfo frameInfo;
+		NeAACDecFrameInfo frameInfo = {0};
 		void *samples = NeAACDecDecode(ctx->decoder, &frameInfo, ctx->inbuffer, len);
 		decoder_dbg("decoder faad: decode %ld samples", frameInfo.samples);
 		if (frameInfo.error > 0)

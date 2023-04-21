@@ -96,8 +96,10 @@ struct sink_ctx_s
 extern const sink_ops_t *sink_alsa;
 
 #ifdef SINK_ALSA_MIXER
-void _sink_volume_cb(void *arg, event_t event, void *data)
+static void _sink_volume_cb(void *arg, event_t event, void *data)
 {
+	if (event != PLAYER_EVENT_VOLUME)
+		return;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	event_player_volume_t *edata = (event_player_volume_t *)data;
 
@@ -108,12 +110,13 @@ void _sink_volume_cb(void *arg, event_t event, void *data)
 	snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
 	if (edata->volume > 0  && edata->volume < 100)
 	{
-		volume = edata->volume * (max - min) / 100 + min;
+		volume = ((edata->volume * (max - min)) / 100) + min;
+		dbg("alsa: volume %d\% [%ld - %ld - %ld]", edata->volume, min, volume, max);
 		snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, volume);
 		edata->changed = 1;
 	}
 	snd_mixer_selem_get_playback_volume(ctx->mixerchannel, 0, &volume);
-	edata->volume = (volume - min) * 100 / (max - min);
+	edata->volume = ((volume - min) * 100) / (max - min) + 1;
 }
 #endif
 

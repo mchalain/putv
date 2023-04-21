@@ -834,7 +834,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	json_object_set(*result, "state", json_state);
 
-	unsigned int volume = player_volume(ctx->player, -1);
+	int volume = player_volume(ctx->player, -1);
 	if (volume > -1 && (ctx->onchangemask & ONCHANGE_VOLUME))
 	{
 		json_object_set(*result, "volume", json_integer(volume));

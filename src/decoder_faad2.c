@@ -391,6 +391,11 @@ static const char *_decoder_mime(decoder_ctx_t *ctx)
 	return mime_audioaac;
 }
 
+static int _decoder_checkout(decoder_ctx_t *ctx, jitter_format_t format)
+{
+	return (format & JITTER_AUDIO);
+}
+
 static void _decoder_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->out)
@@ -417,6 +422,7 @@ const decoder_ops_t _decoder_faad2 =
 	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.prepare = _decoder_prepare,
+	.checkout = _decoder_checkout,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.destroy = _decoder_destroy,

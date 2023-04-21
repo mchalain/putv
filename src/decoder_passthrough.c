@@ -93,6 +93,11 @@ static const char *_decoder_mime(decoder_ctx_t *ctx)
 	return mime_audiopcm;
 }
 
+static int _decoder_checkout(decoder_ctx_t *ctx, jitter_format_t format)
+{
+	return (format & JITTER_AUDIO);
+}
+
 static void _decoder_destroy(decoder_ctx_t *ctx)
 {
 	free(ctx);
@@ -103,6 +108,7 @@ const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
 	.name = "passthrough",
 	.checkin = _decoder_checkin,
 	.init = _decoder_init,
+	.checkout = _decoder_checkout,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.mime = _decoder_mime,

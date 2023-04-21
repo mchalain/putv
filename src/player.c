@@ -280,18 +280,19 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	else
 	{
 		event_data->decoder = decoder;
-		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+		src->ops->attach(src->ctx, event_data->pid, decoder);
 		jitter_t *outstream = NULL;
+		filter_t *filter = NULL;
 		int i;
 		for ( i = 0; i < ctx->noutstreams; i++)
 		{
 			outstream = ctx->outstream[i];
-			if (outstream->format & JITTER_AUDIO)
+			if (decoder->ops->checkout(decoder->ctx, outstream->format))
+			{
+				filter = filter_build(ctx->filtername, outstream, src->info);
 				break;
+			}
 		}
-		filter_t *filter = NULL;
-		if (i < ctx->noutstreams)
-			filter = filter_build(ctx->filtername, outstream, src->info);
 		decoder->filter = filter;
 		if (decoder->ops->prepare)
 		{

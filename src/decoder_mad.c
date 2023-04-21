@@ -385,6 +385,11 @@ static const char *_decoder_mime(decoder_ctx_t *ctx)
 	return mime_audiomp3;
 }
 
+static int _decoder_checkout(decoder_ctx_t *ctx, jitter_format_t format)
+{
+	return (format & JITTER_AUDIO);
+}
+
 static uint32_t _decoder_position(decoder_ctx_t *ctx)
 {
 	uint32_t position = mad_timer_count(ctx->position, 0);
@@ -422,6 +427,7 @@ const decoder_ops_t _decoder_mad =
 	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.prepare = _decoder_prepare,
+	.checkout = _decoder_checkout,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.position = _decoder_position,

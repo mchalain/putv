@@ -290,6 +290,11 @@ static const char *_decoder_mime(decoder_ctx_t *ctx)
 	return mime_audioflac;
 }
 
+static int _decoder_checkout(decoder_ctx_t *ctx, jitter_format_t format)
+{
+	return (format & JITTER_AUDIO);
+}
+
 static uint32_t _decoder_position(decoder_ctx_t *ctx)
 {
 	return ctx->position;
@@ -322,8 +327,9 @@ static const decoder_ops_t _decoder_flac =
 	.name = "flac" ,
 	.checkin = _decoder_checkin,
 	.init = _decoder_init,
-	.jitter = _decoder_jitter,
 	.prepare = _decoder_prepare,
+	.checkout = _decoder_checkout,
+	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.mime = _decoder_mime,
 	.position = _decoder_position,

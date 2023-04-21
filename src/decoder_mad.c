@@ -372,7 +372,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return ret;
 }
 
-static int _decoder_check(const char *path)
+static int _decoder_checkin(decoder_ctx_t *ctx, const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
@@ -419,7 +419,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 const decoder_ops_t _decoder_mad =
 {
 	.name = "mad",
-	.check = _decoder_check,
+	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.prepare = _decoder_prepare,
 	.jitter = _decoder_jitter,

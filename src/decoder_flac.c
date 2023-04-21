@@ -225,7 +225,7 @@ static void *_decoder_thread(void *arg)
 	return (void *)(intptr_t)result;
 }
 
-static int _decoder_check(const char *path)
+static int _decoder_checkin(decoder_ctx_t *ctx, const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
@@ -320,7 +320,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 static const decoder_ops_t _decoder_flac =
 {
 	.name = "flac" ,
-	.check = _decoder_check,
+	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.jitter = _decoder_jitter,
 	.prepare = _decoder_prepare,

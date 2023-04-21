@@ -107,9 +107,9 @@ void utils_srandom()
 
 const char *utils_getmime(const char *path)
 {
-	const decoder_ops_t *ops = decoder_check(path);
-	if (ops != NULL)
-		return ops->mime(NULL);
+	const char *mime = decoder_mime(path);
+	if (mime != NULL)
+		return mime;
 	struct stat statinfo;
 	if (stat(path, &statinfo) == 0 && S_ISDIR(statinfo.st_mode))
 		return mime_directory;

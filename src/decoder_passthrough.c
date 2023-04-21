@@ -74,7 +74,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static int _decoder_check(const char *path)
+static int _decoder_checkin(decoder_ctx_t *ctx, const char *path)
 {
 	if (!strncmp(path, "pcm://", 6))
 		return 1;
@@ -101,7 +101,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
 {
 	.name = "passthrough",
-	.check = _decoder_check,
+	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,

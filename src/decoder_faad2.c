@@ -368,16 +368,20 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	}
 #endif
 	if (ret == 0)
+		ret = _faad_initaac(ctx);
+	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;
 }
 
-static int _decoder_check(const char *path)
+static int _decoder_checkin(decoder_ctx_t *ctx, const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext && !strcmp(ext, ".aac"))
 		return 1;
 	if (ext && !strcmp(ext, ".m4a"))
+		return 1;
+	if (ext && !strcmp(ext, ".mp4"))
 		return 1;
 	return 0;
 }
@@ -410,7 +414,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 const decoder_ops_t _decoder_faad2 =
 {
 	.name = "faad2",
-	.check = _decoder_check,
+	.checkin = _decoder_checkin,
 	.init = _decoder_init,
 	.prepare = _decoder_prepare,
 	.jitter = _decoder_jitter,

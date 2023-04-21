@@ -130,18 +130,21 @@ const char *decoder_mimelist(int first)
 	return mime;
 }
 
-const decoder_ops_t *decoder_check(const char *path)
+const char *decoder_mime(const char *path)
 {
 	int i = 0;
 	const decoder_ops_t *ops = decoderslist[i];
 	while (ops != NULL)
 	{
-		if (ops->check(path))
+		if (ops->checkin(NULL, path))
+		{
+			return ops->mime(NULL);
 			break;
+		}
 		i++;
 		ops = decoderslist[i];
 	}
-	return ops;
+	return NULL;
 }
 
 static void _decoder_init(void) __attribute__((constructor));

@@ -433,7 +433,7 @@ int main(int argc, char **argv)
 		.name = "putv",
 		.inputfd = {0},
 	};
-	const char *media_path;
+	const char *media_path = NULL;
 	int nbinputs = 0;
 
 	int opt;

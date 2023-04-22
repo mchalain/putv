@@ -149,7 +149,7 @@ static int input_parseevent_rel(input_ctx_t *ctx, const struct input_event *even
 	dbg("rel: %d", event->value);
 
 	int ret = -1;
-	ret = client_volume(ctx->client, NULL, ctx, event->value * 5);
+	ret = client_volume(ctx->client, NULL, ctx, event->value);
 
 	return ret;
 }

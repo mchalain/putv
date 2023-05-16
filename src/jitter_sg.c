@@ -55,6 +55,7 @@ struct scatter_s
 	} state;
 	unsigned char *data;
 	size_t len;
+	int channel;
 	void *beat;
 	scatter_t *next;
 };
@@ -70,6 +71,7 @@ struct jitter_private_s
 	pthread_cond_t condpush;
 	pthread_cond_t condpeer;
 	unsigned int level;
+	unsigned int nbchannels;
 	enum
 	{
 		JITTER_STOP,
@@ -83,8 +85,10 @@ struct jitter_private_s
 };
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
+static unsigned char *jitter_pull_channel(jitter_ctx_t *jitter, int channel);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
 static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat);
+static unsigned char *jitter_peer_channel(jitter_ctx_t *jitter, int channel, void **beat);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
 static void jitter_reset(jitter_ctx_t *jitter);
 
@@ -192,8 +196,15 @@ static void jitter_lock(jitter_ctx_t *ctx)
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 {
+	return jitter_pull_channel(jitter, 0);
+}
+
+static unsigned char *jitter_pull_channel(jitter_ctx_t *jitter, int channel)
+{
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	if (private->nbchannels < channel + 1)
+		private->nbchannels = channel + 1;
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
@@ -217,6 +228,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	{
 		private->in->state = SCATTER_PULL;
 		ret = private->in->data;
+		private->in->channel = channel;
 	}
 	pthread_mutex_unlock(&private->mutex);
 	jitter_dbg(jitter, "pull %p", private->in);
@@ -334,6 +346,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 
 static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 {
+	return jitter_peer_channel(jitter, 0, beat);
+}
+
+static unsigned char *jitter_peer_channel(jitter_ctx_t *jitter, int channel, void **beat)
+{
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
 	pthread_mutex_lock(&private->mutex);
@@ -401,6 +418,8 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		 */
 		jitter_dbg(jitter, "peer block on %p %d %d", private->out, private->state, private->out->state);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
+		if (private->out->channel != channel)
+			jitter_pop(jitter, private->out->len);
 	}
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
@@ -557,6 +576,12 @@ static void jitter_pause(jitter_ctx_t *jitter, int enable)
 	pthread_cond_broadcast(&private->condpeer);
 }
 
+static unsigned int jitter_nbchannels(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	return private->nbchannels;
+}
+
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 {
 	.heartbeat = jitter_heartbeat,
@@ -570,4 +595,5 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.length = jitter_length,
 	.empty = jitter_empty,
 	.pause = jitter_pause,
+	.nbchannels = jitter_nbchannels,
 };

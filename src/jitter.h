@@ -49,17 +49,20 @@ struct jitter_ctx_s
 typedef struct jitter_ops_s jitter_ops_t;
 struct jitter_ops_s
 {
-	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *new);
+	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *);
 	void (*lock)(jitter_ctx_t *);
 	void (*reset)(jitter_ctx_t *);
 	unsigned char *(*pull)(jitter_ctx_t *);
-	void (*push)(jitter_ctx_t *, size_t len, void *beat);
-	unsigned char *(*peer)(jitter_ctx_t *, void **beat);
+	unsigned char *(*pull_channel)(jitter_ctx_t *,int);
+	void (*push)(jitter_ctx_t *, size_t, void *);
+	unsigned char *(*peer)(jitter_ctx_t *, void **);
+	unsigned char *(*peer_channel)(jitter_ctx_t *, int, void **);
 	void (*pop)(jitter_ctx_t *, size_t len);
 	void (*flush)(jitter_ctx_t *);
 	size_t (*length)(jitter_ctx_t*);
 	int (*empty)(jitter_ctx_t *);
-	void (*pause)(jitter_ctx_t *jitter, int enable);
+	void (*pause)(jitter_ctx_t *, int);
+	unsigned int (*nbchannels)(jitter_ctx_t *);
 };
 
 #define JITTER_AUDIO		0x80000000

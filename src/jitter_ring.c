@@ -430,6 +430,11 @@ static void jitter_pause(jitter_ctx_t *jitter, int enable)
 	pthread_cond_broadcast(&private->condpeer);
 }
 
+static unsigned int jitter_nbchannels(jitter_ctx_t *jitter)
+{
+	return 1;
+}
+
 static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 {
 	.heartbeat = jitter_heartbeat,
@@ -443,4 +448,5 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.length = jitter_length,
 	.empty = jitter_empty,
 	.pause = jitter_pause,
+	.nbchannels = jitter_nbchannels,
 };

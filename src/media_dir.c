@@ -384,6 +384,7 @@ static int media_next(media_ctx_t *ctx)
 	ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
 
 	pthread_mutex_lock(&ctx->mutex);
+	/// firstmediaid must be set to -1 on stoping
 	if (ctx->firstmediaid == mediaid)
 		ret = -1;
 	ctx->mediaid = mediaid;
@@ -408,6 +409,7 @@ static int media_end(media_ctx_t *ctx)
 {
 	ctx->current = _free_medialist(ctx->current, 0);
 	ctx->mediaid = -1;
+	ctx->firstmediaid = -1;
 	return ctx->mediaid;
 }
 

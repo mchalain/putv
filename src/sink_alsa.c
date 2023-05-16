@@ -111,7 +111,7 @@ static void _sink_volume_cb(void *arg, event_t event, void *data)
 	if (edata->volume > 0  && edata->volume < 100)
 	{
 		volume = ((edata->volume * (max - min)) / 100) + min;
-		dbg("alsa: volume %d\% [%ld - %ld - %ld]", edata->volume, min, volume, max);
+		dbg("alsa: volume %d [%ld - %ld - %ld]", edata->volume, min, volume, max);
 		snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, volume);
 		edata->changed = 1;
 	}
@@ -458,6 +458,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	{
 		int size = ctx->buffersize;
 		int samplerate = ctx->in->ctx->frequence;
+		ret = snd_pcm_drain(ctx->playback_handle);
 		if (_pcm_open(ctx, ctx->in->format, &samplerate, &size) == 0)
 			ctx->samplerate = samplerate;
 #ifdef SINK_ALSA_NOISE

@@ -141,10 +141,18 @@ static int _faad_parsetags(decoder_ctx_t *ctx)
 {
 	size_t len = 0;
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	if (ctx->inbuffer == NULL)
+		return -1;
 	if (!memcmp(ctx->inbuffer, "ID3", 3))
 	{
 		len = uint32(ctx->inbuffer + 6);
 		len += 10;
+	}
+	while (len > ctx->in->ops->length(ctx->in->ctx))
+	{
+		ctx->in->ops->pop(ctx->in->ctx, ctx->in->ops->length(ctx->in->ctx));
+		len -= ctx->in->ops->length(ctx->in->ctx);
+		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 	}
 	ctx->in->ops->pop(ctx->in->ctx, len);
 	return 0;
@@ -374,10 +382,12 @@ static int _decoder_checkin(decoder_ctx_t *ctx, const char *path)
 	char *ext = strrchr(path, '.');
 	if (ext && !strcmp(ext, ".aac"))
 		return 1;
+#if 0
 	if (ext && !strcmp(ext, ".m4a"))
 		return 1;
 	if (ext && !strcmp(ext, ".mp4"))
 		return 1;
+#endif
 	return 0;
 }
 

@@ -1,3 +1,4 @@
+#!/bin/sh
 #
 # Starts putv.
 #

@@ -247,8 +247,11 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond_int);
 		sched_yield();
+		pthread_mutex_lock(&ctx->mutex);
+		state = ctx->state;
+		pthread_mutex_unlock(&ctx->mutex);
 	}
-	return ctx->state;
+	return state;
 }
 
 int player_waiton(player_ctx_t *ctx, int state)
@@ -256,7 +259,7 @@ int player_waiton(player_ctx_t *ctx, int state)
 	if (ctx->state == STATE_ERROR)
 		return -1;
 	if (ctx->state != state && state != STATE_UNKNOWN)
-		return 0;
+		return ctx->state;
 	pthread_mutex_lock(&ctx->mutex);
 	do
 	{
@@ -265,7 +268,7 @@ int player_waiton(player_ctx_t *ctx, int state)
 	}
 	while (ctx->state == state);
 	pthread_mutex_unlock(&ctx->mutex);
-	return 1;
+	return ctx->state;
 }
 
 static void _player_new_es(player_ctx_t *ctx, void *eventarg)
@@ -439,14 +442,16 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			 * media will call _player_play
 			 * and this one will set ctx->nextsrc
 			 */
-			ctx->media->ops->play(ctx->media->ctx, id, _player_play, ctx);
+			id = ctx->media->ops->play(ctx->media->ctx, id, _player_play, ctx);
 			/**
 			 * there isn't any stream in the player
 			 * the new one is on nextsrc, then player pass on CHANGE
 			 * to switch nextsrc to src
 			 */
 			if (ctx->src == NULL)
+			{
 				state = STATE_CHANGE | pause;
+			}
 		}
 		break;
 		case STATE_CHANGE:
@@ -473,6 +478,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			}
 			else
 			{
+				dbg("player: no src");
 				state = STATE_STOP;
 			}
 		break;

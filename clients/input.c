@@ -240,7 +240,6 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 	default:
 		dbg("key %d", event->code);
 	}
-	dbg("%s ret %d", __FUNCTION__, ret);
 	return ret;
 }
 
@@ -452,7 +451,9 @@ int main(int argc, char **argv)
 			case 'i':
 				fd = open(optarg, O_RDONLY);
 				if (fd > 0)
+				{
 					data.inputfd[nbinputs++] = fd;
+				}
 			break;
 			case 'm':
 				media_path = optarg;
@@ -493,7 +494,16 @@ int main(int argc, char **argv)
 	}
 
 	if (nbinputs == 0)
-		data.inputfd[nbinputs++] = open("/dev/input/event0", O_RDONLY);
+	{
+		fd = open("/dev/input/event0", O_RDONLY);
+		if (fd > 0)
+			data.inputfd[nbinputs++] = fd;
+	}
+	if (nbinputs == 0)
+	{
+		err("No input available");
+		exit(1);
+	}
 	json_error_t error;
 	if (media_path)
 	{

@@ -243,6 +243,18 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 	return ret;
 }
 
+static int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
+{
+	int ret;
+
+	ret = input_parseevent_key(ctx, event);
+	if (ret == -4)
+		ret = input_parseevent_rel(ctx, event);
+	if (ret == -4)
+		ret = 0;
+	return ret;
+}
+
 static int input_closing(void *data, json_t *params)
 {
 	input_ctx_t *ctx = (input_ctx_t *)data;
@@ -320,11 +332,7 @@ static int run(input_ctx_t *ctx)
 		}
 		if (ret > 0 && ctx->client != NULL)
 		{
-			ret = input_parseevent_key(ctx, &event);
-			if (ret == -4)
-				ret = input_parseevent_rel(ctx, &event);
-			if (ret == -4)
-				ret = 0;
+			ret = input_parseevent(ctx, &event);
 		}
 		if (ret < 0 && ret != CLIENT_WAITING)
 		{

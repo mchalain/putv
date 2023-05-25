@@ -538,18 +538,27 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: play");
 
-	switch (player_state(ctx->player, STATE_PLAY))
+	player_state(ctx->player, STATE_PLAY);
+	switch (player_waiton(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{s:s}", "state", str_stop));
 	break;
 	case STATE_CHANGE:
 	case STATE_PLAY:
-		*result = json_pack("{ss}", "state", str_play);
+		*result = json_pack("{s:s,s:i}",
+						"state", str_play,
+						"id", player_mediaid(ctx->player)
+					);
 		ret = 0;
 	break;
 	case STATE_PAUSE:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR,
+				json_pack("{s:s,s:i}",
+						"state", str_pause,
+						"id", player_mediaid(ctx->player)
+						)
+				);
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
@@ -563,16 +572,18 @@ static int method_pause(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: pause");
 
-	switch (player_state(ctx->player, STATE_PAUSE))
+	int id = player_mediaid(ctx->player);
+	player_state(ctx->player, STATE_PAUSE);
+	switch (player_waiton(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{s:s}", "state", str_stop));
 	break;
 	case STATE_PLAY:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{s:s,s:i}", "state", str_play, "id", id));
 	break;
 	case STATE_PAUSE:
-		*result = json_pack("{ss}", "state", str_pause);
+		*result = json_pack("{s:s,s:i}", "state", str_pause, "id", id);
 		ret = 0;
 	break;
 	default:
@@ -587,17 +598,23 @@ static int method_stop(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: stop");
 
-	switch (player_state(ctx->player, STATE_STOP))
+	int id = player_mediaid(ctx->player);
+	player_state(ctx->player, STATE_STOP);
+	switch (player_waiton(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		*result = json_pack("{ss}", "state", str_stop);
+		*result = json_pack("{s:s}", "state", str_stop);
 		ret = 0;
 	break;
 	case STATE_PLAY:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR,
+				json_pack("{s:s,s:i}",
+					"state", str_play,
+					"id", id)
+				);
 	break;
 	case STATE_PAUSE:
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{s:s}", "state", str_pause, "id", id));
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
@@ -608,24 +625,29 @@ static int method_stop(json_t *json_params, json_t **result, void *userdata)
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	media_t *media = player_media(ctx->player);
 	int ret = -1;
 	cmds_dbg("cmds: next");
 
-	int id = player_next(ctx->player, 1);
-	switch (player_state(ctx->player, STATE_UNKNOWN))
+	player_next(ctx->player, 1);
+	switch (player_waiton(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		*result = json_pack("{ss}", "state", str_stop);
+		*result = json_pack("{s:s}", "state", str_stop);
 		ret = 0;
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
-		*result = json_pack("{ss,s:i}", "state", str_play, "id", id);
+		*result = json_pack("{s:s,s:i}",
+						"state", str_play,
+						"id", player_mediaid(ctx->player)
+					);
 		ret = 0;
 	break;
 	case STATE_PAUSE:
-		*result = json_pack("{ss,s:i}", "state", str_pause, "id", id);
+		*result = json_pack("{s:s,s:i}",
+						"state", str_pause,
+						"id", player_mediaid(ctx->player)
+					);
 		ret = 0;
 	break;
 	default:
@@ -648,7 +670,7 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 	ret = player_play(ctx->player, id);
 	if (ret == 0)
 	{
-		*result = json_pack("{si}", "next", id);
+		*result = json_pack("{s:i}", "next", id);
 		ret = 0;
 	}
 	else

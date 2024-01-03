@@ -58,6 +58,8 @@
 #define dbg(...)
 #endif
 
+#define input_dbg(...)
+
 typedef void *(*__start_routine_t) (void *);
 
 #define MAX_INPUTS 3
@@ -169,7 +171,7 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
-		dbg("key KEY_PLAYPAUSE %X", ctx->state);
+		input_dbg("key KEY_PLAYPAUSE %X", ctx->state);
 		if ((ctx->state & ~STATE_OPTIONSMASK) == STATE_PLAY)
 			ret = client_pause(ctx->client, input_checkstate, ctx);
 		else
@@ -177,38 +179,38 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 	break;
 	case KEY_PLAYCD:
 	case KEY_PLAY:
-		dbg("key KEY_PLAY");
+		input_dbg("key KEY_PLAY");
 		ret = client_play(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_PAUSECD:
 	case KEY_PAUSE:
-		dbg("key KEY_PAUSE");
+		input_dbg("key KEY_PAUSE");
 		ret = client_pause(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_STOPCD:
 	case KEY_STOP:
-		dbg("key KEY_STOP");
+		input_dbg("key KEY_STOP");
 		ret = client_stop(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_NEXTSONG:
 	case KEY_NEXT:
-		dbg("key KEY_NEXT");
+		input_dbg("key KEY_NEXT");
 		ret = client_next(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_VOLUMEDOWN:
-		dbg("key KEY_VOLUMEDOWN");
+		input_dbg("key KEY_VOLUMEDOWN");
 		ret = client_volume(ctx->client, NULL, ctx, -5);
 	break;
 	case KEY_VOLUMEUP:
-		dbg("key KEY_VOLUMEUP");
+		input_dbg("key KEY_VOLUMEUP");
 		ret = client_volume(ctx->client, NULL, ctx, +5);
 	break;
 	case KEY_SHUFFLE:
-		dbg("key KEY_SHUFFLE");
+		input_dbg("key KEY_SHUFFLE");
 		ret = media_options(ctx->client, NULL, ctx, (ctx->state & STATE_RANDOM)?0:1, (ctx->state & STATE_LOOP)?0:1);
 	break;
 	case KEY_PROG1:
-		dbg("key KEY_PROG1");
+		input_dbg("key KEY_PROG1");
 		if (ctx->media)
 		{
 			int i = ctx->media_id;
@@ -223,7 +225,7 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 		}
 	break;
 	case KEY_PROG2:
-		dbg("key KEY_PROG2");
+		input_dbg("key KEY_PROG2");
 		if (ctx->media)
 		{
 			int i = ctx->media_id;
@@ -238,7 +240,7 @@ static int input_parseevent_key(input_ctx_t *ctx, const struct input_event *even
 		}
 	break;
 	default:
-		dbg("key %d", event->code);
+		input_dbg("key %d", event->code);
 	}
 	return ret;
 }

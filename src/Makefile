@@ -50,6 +50,7 @@ putv_SOURCES-$(SRC_UDP)+=src_udp.c
 putv_LIBS-$(SRC_UDP)+=pthread
 putv_SOURCES-$(DEMUX_PASSTHROUGH)+=demux_passthrough.c
 putv_SOURCES-$(DEMUX_RTP)+=demux_rtp.c
+putv_SOURCES-$(DEMUX_DVB)+=demux_dvb.c
 putv_SOURCES-$(DECODER_PASSTHROUGH)+=decoder_passthrough.c
 ifneq ($(DECODER_MODULES),y)
 putv_SOURCES-$(DECODER_MAD)+=decoder_mad.c

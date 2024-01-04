@@ -38,6 +38,8 @@
 
 #include "player.h"
 #include "event.h"
+#include "decoder.h"
+#include "demux.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -47,6 +49,9 @@ struct src_ctx_s
 	player_ctx_t *player;
 	const char *mime;
 	jitter_t *out;
+#ifdef DEMUX_PASSTHROUGH
+	demux_t *demux;
+#endif
 	decoder_t *estream;
 	event_listener_t *listener;
 	long pid;
@@ -55,7 +60,6 @@ struct src_ctx_s
 #include "src.h"
 #include "media.h"
 #include "jitter.h"
-#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -144,6 +148,11 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 		src->fd = fd;
 		src->player = player;
 		src->mime = mime;
+#ifdef DEMUX_PASSTHROUGH
+		src->demux = demux_build(player, url, mime);
+		if (src->demux != NULL)
+			warn("src: demux enabled");
+#endif
 		dbg("src: %s %s", src_file->name, url);
 		return src;
 	}
@@ -171,8 +180,8 @@ static int _src_prepare(src_ctx_t *ctx, const char *info)
 static int _src_run(src_ctx_t *ctx)
 {
 	dbg("src: run");
-	if (_src_attach(ctx, ctx->pid, ctx->estream) < 0)
-		return -1;
+//	if (_src_attach(ctx, ctx->pid, ctx->estream) < 0)
+//		return -1;
 	const src_t src = { .ops = src_file, .ctx = ctx};
 	event_decode_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
@@ -189,6 +198,13 @@ static int _src_run(src_ctx_t *ctx)
 
 static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
+#ifdef DEMUX_PASSTHROUGH
+	if (ctx->demux != NULL)
+	{
+		ctx->demux->ops->eventlistener(ctx->demux->ctx, cb, arg);
+		return;
+	}
+#endif
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
 	listener->arg = arg;
@@ -211,9 +227,20 @@ static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
-	ctx->estream = decoder;
+#ifdef DEMUX_PASSTHROUGH
+	if (ctx->demux != NULL)
+	{
+		if (ctx->demux->ops->attach(ctx->demux->ctx, index, decoder) < 0)
+			return -1;
+		ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_LOW);
+	}
+	else
+#endif
+	{
+		ctx->estream = decoder;
+		ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_LOW);
+	}
 	ctx->pid = index;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 	if (ctx->out != NULL)
 	{
 		src_dbg("src: add producter to %s", ctx->out->ctx->name);
@@ -227,6 +254,10 @@ static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 
 static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 {
+#ifdef DEMUX_PASSTHROUGH
+	if (ctx->demux != NULL)
+		return ctx->demux->ops->estream(ctx->demux->ctx, index);
+#endif
 	return ctx->estream;
 }
 
@@ -239,6 +270,10 @@ const char *_src_mime(src_ctx_t *ctx, int index)
 
 static void _src_destroy(src_ctx_t *ctx)
 {
+#ifdef DEMUX_PASSTHROUGH
+	if (ctx->demux != NULL)
+		ctx->demux->ops->destroy(ctx->demux->ctx);
+#endif
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
 	event_listener_t *listener = ctx->listener;

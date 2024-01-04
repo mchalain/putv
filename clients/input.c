@@ -63,6 +63,7 @@
 typedef void *(*__start_routine_t) (void *);
 
 #define MAX_INPUTS 3
+#define MAX_EVENTS 10
 
 typedef struct input_ctx_s input_ctx_t;
 struct input_ctx_s
@@ -148,8 +149,13 @@ static int input_parseevent_rel(input_ctx_t *ctx, const struct input_event *even
 
 	if (event->code != REL_HWHEEL)
 		return -4;
-	dbg("rel: %d", event->value);
+	input_dbg("rel: %d", event->value);
 
+	return 0;
+}
+
+static int input_flush_relevent(input_ctx_t *ctx, const struct input_event *event)
+{
 	int ret = -1;
 	ret = client_volume(ctx->client, NULL, ctx, event->value);
 
@@ -313,7 +319,8 @@ static int run(input_ctx_t *ctx)
 {
 	while (ctx->run)
 	{
-		struct input_event event;
+		struct input_event event[MAX_EVENTS] = {0};
+		int nbevents = 0;
 		int maxfd = 0;
 		fd_set rfds;
 		struct timeval timeout = {2,0};
@@ -327,16 +334,31 @@ static int run(input_ctx_t *ctx)
 		int ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		for (int i = 0; i < MAX_INPUTS && ctx->inputfd[i] > 0; i++)
 		{
-			if (FD_ISSET(ctx->inputfd[i], &rfds))
+			int length = 1;
+			while (FD_ISSET(ctx->inputfd[i], &rfds) && nbevents < MAX_EVENTS)
 			{
-				ret = read(ctx->inputfd[i], &event, sizeof(event));
+				length = read(ctx->inputfd[i], &event[nbevents], sizeof(event[nbevents]));
+				if (length == sizeof(event[nbevents]))
+					nbevents++;
+				else
+					break;
 			}
 		}
-		if (ret > 0 && ctx->client != NULL)
+		int relevent = -1;
+		for (int i = 0; i < nbevents && ctx->client != NULL; i++)
 		{
-			ret = input_parseevent(ctx, &event);
+			ret = input_parseevent(ctx, &event[i]);
+			if (event[i].type == EV_REL && event[i].code == REL_HWHEEL)
+			{
+				if (relevent == -1)
+					relevent = i;
+				else
+					event[relevent].value += event[i].value;
+			}
 		}
-		if (ret < 0 && ret != CLIENT_WAITING)
+		if (relevent != -1)
+			input_flush_relevent(ctx, &event[relevent]);
+		if (ret < 0 && ret != CLIENT_WAITING && errno != 0)
 		{
 			err("input: client error %s", strerror(errno));
 			break;

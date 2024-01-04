@@ -463,6 +463,7 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 		out->estream = decoder;
 		out->jitter = out->estream->ops->jitter(out->estream->ctx, ctx->jitte);
 	}
+	return 0;
 }
 
 static decoder_t *demux_estream(demux_ctx_t *ctx, long index)

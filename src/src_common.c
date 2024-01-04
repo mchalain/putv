@@ -146,6 +146,9 @@ demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
 	#ifdef DEMUX_RTP
 		demux_rtp,
 	#endif
+	#ifdef DEMUX_DVB
+		demux_dvb,
+	#endif
 		NULL
 	};
 

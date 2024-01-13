@@ -320,8 +320,12 @@ error:
 
 static int _pcm_close(sink_ctx_t *ctx)
 {
-	snd_pcm_drain(ctx->playback_handle);
-	snd_pcm_close(ctx->playback_handle);
+	if (ctx->playback_handle)
+	{
+		snd_pcm_drain(ctx->playback_handle);
+		snd_pcm_close(ctx->playback_handle);
+		ctx->playback_handle = NULL;
+	}
 	return 0;
 }
 
@@ -460,8 +464,8 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	{
 		int size = ctx->buffersize;
 		int samplerate = ctx->in->ctx->frequence;
-		ret = snd_pcm_drain(ctx->playback_handle);
-		if (_pcm_open(ctx, ctx->in->format, &samplerate, &size) == 0)
+		ret = _pcm_open(ctx, ctx->in->format, &samplerate, &size);
+		if (ret == 0)
 			ctx->samplerate = samplerate;
 #ifdef SINK_ALSA_NOISE
 		free(ctx->noise);
@@ -500,9 +504,9 @@ static void *sink_thread(void *arg)
 	while (ctx->state != STATE_ERROR)
 	{
 		unsigned char *buff = NULL;
-		int length = 0;
-#ifdef SINK_ALSA_NOISE
-		ret = snd_pcm_wait(ctx->playback_handle, 1000);
+		ret = 0;
+		if (ctx->playback_handle)
+			ret = snd_pcm_wait(ctx->playback_handle, 1000);
 		if (ret == -EPIPE)
 		{
 			/**
@@ -515,6 +519,9 @@ static void *sink_thread(void *arg)
 			player_state(ctx->player, STATE_STOP);
 			continue;
 		}
+
+		size_t length = 0;
+#ifdef SINK_ALSA_NOISE
 		if (ctx->in->ops->empty(ctx->in->ctx))
 		{
 			snd_pcm_sframes_t samples;
@@ -528,10 +535,8 @@ static void *sink_thread(void *arg)
 				usleep(LATENCE_MS * 1000);
 				continue;
 			}
-#ifdef SINK_ALSA_NOISE
 			length = ctx->buffersize;
 			buff = ctx->noise;
-#endif
 			ctx->noisecnt ++;
 		}
 		else
@@ -544,18 +549,21 @@ static void *sink_thread(void *arg)
 			_alsa_checksamplerate(ctx);
 		}
 		//snd_pcm_mmap_begin
-		if (length > 0)
+		if (length > 0 && ctx->playback_handle)
 		{
 			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
 #ifdef SINK_DUMP
 			write(ctx->dumpfd, buff, length);
 #endif
+			sink_dbg("sink: alsa write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
 		}
-		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
-		if (ret == -EPIPE)
+		else if (ctx->playback_handle)
 		{
-			warn("pcm recover");
-			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			warn("sink: no data to push on alsa");
+		}
+		else
+		{
+			dbg("sink: alsa runout");
 		}
 #ifdef SINK_ALSA_NOISE
 		if (buff == ctx->noise)

@@ -454,6 +454,7 @@ class PlayerCmd extends Player
 		break;
 		case "disconnect":
 			action = "remove";
+			this.#cmdaction = "update";
 			break;
 		case "pause":
 		case "stop":

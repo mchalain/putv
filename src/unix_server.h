@@ -17,4 +17,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 void unixserver_remove(thread_info_t *info);
 void unixserver_kill(thread_info_t *info);
 
+int unixsocket_init(const char *socketpath);
+void unixsocket_close(int sock);
+
 #endif

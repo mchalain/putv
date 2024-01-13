@@ -57,6 +57,46 @@ typedef struct thread_server_s
 } thread_server_t;
 
 
+int unixsocket_init(const char *socketpath)
+{
+	int sock;
+	int ret = -1;
+
+	sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sock > 0)
+	{
+
+		struct sockaddr_un addr;
+		memset(&addr, 0, sizeof(struct sockaddr_un));
+		addr.sun_family = AF_UNIX;
+		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
+		char *directory = dirname((char *)socketpath);
+		umask(0);
+		mkdir(directory, 0777);
+		unlink(addr.sun_path);
+
+		ret = bind(sock, (struct sockaddr *) &addr, sizeof(addr));
+		if (ret == 0)
+		{
+			ret = listen(sock, 10);
+		}
+		if (ret < 0)
+		{
+			close(sock);
+			err("Unix server error on  %s :%s", socketpath, strerror(errno));
+		}
+		else
+			warn("Unix server on : %s", socketpath);
+	}
+	return sock;
+}
+
+void unixsocket_close(int sock)
+{
+	shutdown(sock, SHUT_RDWR);
+	close(sock);
+}
+
 typedef int (*client_routine_t)(struct thread_info_s *info);
 
 typedef void *(*start_routine_t)(void*);
@@ -75,7 +115,7 @@ void unixserver_remove(thread_info_t *info)
 		err("the list must be never empty when removing");
 		return;
 	}
-	warn("unix: remove server");
+	warn("unix: remove cient %p", info);
 	/**
 	 * firstinfo is an empty client socket
 	 */
@@ -86,25 +126,30 @@ void unixserver_remove(thread_info_t *info)
 		it = it->next;
 	}
 	if (it != NULL)
-		it->next = info->next;
-	if (info->sock > 0)
 	{
-		shutdown(info->sock, SHUT_RDWR);
-		close(info->sock);
+		it->next = info->next;
+		if (info->sock > 0)
+		{
+			unixsocket_close(info->sock);
+		}
+		warn("unix: last cient %p", it->next);
+		free(info);
 	}
-	free(info);
 	pthread_mutex_unlock(&server->lock);
 }
 
 void unixserver_kill(thread_info_t *info)
 {
 	thread_server_t *server = info->server;
+	warn("unix: kill server %p", info);
 	pthread_mutex_lock(&server->lock);
 	thread_info_t *it = &info->server->firstinfo;
 	while (it->next) {
 		thread_info_t *old = it->next;
-		if (old->sock == info->sock) {
-			close(info->sock);
+		if (old->sock == info->sock)
+		{
+			warn("unix: kill cient %p", info);
+			unixsocket_close(info->sock);
 			it->next = old->next;
 			free(old);
 		}
@@ -120,47 +165,29 @@ void unixserver_kill(thread_info_t *info)
 int unixserver_run(client_routine_t routine, void *userctx, const char *socketpath)
 {
 	int sock;
-	int ret = -1;
 
-	sock = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (sock > 0)
-	{
+	sock = unixsocket_init(socketpath);
+	if (sock > 0) {
 		thread_server_t *server = calloc(1, sizeof(*server));
 		server->sock = sock;
 		pthread_mutex_init(&server->lock, NULL);
 
-		struct sockaddr_un addr;
-		memset(&addr, 0, sizeof(struct sockaddr_un));
-		addr.sun_family = AF_UNIX;
-		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
-		char *directory = dirname((char *)socketpath);
-		umask(0);
-		mkdir(directory, 0777);
-		unlink(addr.sun_path);
-
-		ret = bind(sock, (struct sockaddr *) &addr, sizeof(addr));
-		if (ret == 0) {
-			ret = listen(sock, 10);
-			fprintf(stderr, "Unix server on : %s\n", socketpath);
-		}
-		if (ret == 0) {
-			int newsock = 0;
-			do {
-				newsock = accept(sock, NULL, NULL);
-				if (newsock > 0) {
-					struct thread_info_s *info = calloc(1, sizeof(*info));
-					info->sock = newsock;
-					info->userctx = userctx;
-					info->server = server;
-					pthread_mutex_lock(&server->lock);
-					struct thread_info_s *it = &server->firstinfo;
-					while (it->next != NULL) it = it->next;
-					it->next = info;
-					pthread_mutex_unlock(&server->lock);
-					start(routine, info);
-				}
-			} while(newsock > 0);
-		}
+		int newsock = 0;
+		do {
+			newsock = accept(sock, NULL, NULL);
+			if (newsock > 0) {
+				struct thread_info_s *info = calloc(1, sizeof(*info));
+				info->sock = newsock;
+				info->userctx = userctx;
+				info->server = server;
+				pthread_mutex_lock(&server->lock);
+				struct thread_info_s *it = &server->firstinfo;
+				while (it->next != NULL) it = it->next;
+				it->next = info;
+				pthread_mutex_unlock(&server->lock);
+				start(routine, info);
+			}
+		} while(newsock > 0);
 		close(sock);
 		pthread_mutex_lock(&server->lock);
 		struct thread_info_s *info = server->firstinfo.next;
@@ -174,8 +201,9 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		pthread_mutex_destroy(&server->lock);
 		free(server);
 	}
-	if (ret) {
-		fprintf(stderr, "Unix server %s error : %s\n", socketpath, strerror(errno));
+	else
+	{
+		err("Unix server %s error : %s", socketpath, strerror(errno));
 	}
-	return ret;
+	return 0;
 }

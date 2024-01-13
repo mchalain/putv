@@ -175,6 +175,15 @@ static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
 {
 	int ret;
+	if (ctx->playback_handle == NULL)
+	{
+		sink_dbg("sink: open %s", ctx->soundcard);
+		ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
+		if (ret < 0)
+			return ret;
+	}
+	else
+		snd_pcm_drain(ctx->playback_handle);
 
 	pcm_config_t config = {0};
 	jitter_format_t downformat = _pcm_config(format, &config);
@@ -377,15 +386,6 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	ctx->buffersize = LATENCE_MS * samplerate / 1000;
 	ctx->samplerate = samplerate;
 
-	int ret;
-	sink_dbg("sink: open %s", soundcard);
-	ret = snd_pcm_open(&ctx->playback_handle, soundcard, SND_PCM_STREAM_PLAYBACK, 0);
-	if (ret < 0)
-	{
-		err("sink: open %s", soundcard);
-		free(ctx);
-		return NULL;
-	}
 	snd_lib_error_set_handler(_alsa_error);
 	if (_pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize) < 0)
 	{

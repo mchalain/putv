@@ -105,13 +105,6 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		}
 		ctx->media = media;
 		pthread_mutex_unlock(&ctx->mutex);
-
-		event_player_state_t event = {
-				.playerctx = ctx,
-				.state = ctx->state,
-				.mediapath = mediapath,
-		};
-		_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 	}
 	if (ctx->media)
 	{
@@ -148,10 +141,12 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 int player_next(player_ctx_t *ctx, int change)
 {
 	int nextid = -1;
+	player_dbg("player: next");
 	if (ctx->nextsrc != NULL)
 		nextid = ctx->nextsrc->mediaid;
 	if (ctx->media != NULL && change)
 	{
+		player_dbg("player: change to next");
 		/**
 		 * This allows to start the player with next command
 		 */
@@ -234,6 +229,8 @@ int player_mediaid(player_ctx_t *ctx)
 
 state_t player_state(player_ctx_t *ctx, state_t state)
 {
+	state_t old = ctx->state;
+	player_dbg("player: entry state %X => %X",ctx->state, state);
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
 	{
 		if (pthread_mutex_trylock(&ctx->mutex) != 0)
@@ -242,33 +239,35 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 			return ctx->state;
 		}
 
-		player_dbg("player: change state %d => %d",ctx->state, state);
+		player_dbg("player: request state %X => %X",ctx->state, state);
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond_int);
-		sched_yield();
-		pthread_mutex_lock(&ctx->mutex);
-		state = ctx->state;
-		pthread_mutex_unlock(&ctx->mutex);
 	}
-	return state;
+	return old;
 }
 
 int player_waiton(player_ctx_t *ctx, int state)
 {
-	if (ctx->state == STATE_ERROR)
-		return -1;
-	if (ctx->state != state && state != STATE_UNKNOWN)
-		return ctx->state;
+	int ret = -1;
 	pthread_mutex_lock(&ctx->mutex);
+	if (ctx->state == STATE_ERROR)
+		goto end_waiton;
+	if (ctx->state != state && state != STATE_UNKNOWN)
+	{
+		ret = ctx->state;
+		goto end_waiton;
+	}
 	do
 	{
-		dbg("player: waiton %d", state);
+		player_dbg("player: waiton %d", state);
 		pthread_cond_wait(&ctx->cond, &ctx->mutex);
 	}
 	while (ctx->state == state);
+	player_dbg("player: state changed %X", ctx->state);
+end_waiton:
 	pthread_mutex_unlock(&ctx->mutex);
-	return ctx->state;
+	return ret;
 }
 
 static void _player_new_es(player_ctx_t *ctx, void *eventarg)
@@ -520,14 +519,17 @@ int player_run(player_ctx_t *ctx)
 		/******************
 		 * event manager  *
 		 ******************/
+		const char *mediapath = NULL;
+		if (ctx->media)
+			mediapath = ctx->media->ops->name;
 		event_player_state_t event = {
 				.playerctx = ctx,
 				.state = ctx->state,
-				.mediapath = NULL,
+				.mediapath = mediapath,
 		};
 		_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 
-		if (last_state != (new_state & ~STATE_PAUSE_MASK))
+		if (last_state != new_state)
 		{
 			ctx->state = new_state;
 			pthread_cond_broadcast(&ctx->cond);

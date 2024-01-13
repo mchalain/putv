@@ -234,22 +234,6 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	return ctx;
 }
 
-#if 0
-static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
-{
-	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
-	switch(event)
-	{
-		case SRC_EVENT_NEW_ES:
-		{
-			event_new_es_t *event_data = (event_new_es_t *)eventarg;
-			_decoder_jitter(ctx, event_data->jitte);
-		}
-		break;
-	}
-}
-#endif
-
 static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *info)
 {
 	decoder_dbg("decoder: prepare");

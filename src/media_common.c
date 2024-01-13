@@ -687,14 +687,16 @@ media_t *media_build(player_ctx_t *player, const char *url)
 	char *oldpath = current_path;
 	current_path = strdup(url);
 
-	int i = 0;
 	media_ctx_t *media_ctx = NULL;
-	while (media_list[i] != NULL)
+	const media_ops_t *media_ops = NULL;
+	for (int i = 0; media_list[i] != NULL; i++)
 	{
 		media_ctx = media_list[i]->init(player, current_path);
 		if (media_ctx != NULL)
+		{
+			media_ops = media_list[i];
 			break;
-		i++;
+		}
 	}
 	if (media_ctx == NULL)
 	{
@@ -704,7 +706,7 @@ media_t *media_build(player_ctx_t *player, const char *url)
 		return NULL;
 	}
 	media_t *media = calloc(1, sizeof(*media));
-	media->ops = media_list[i];
+	media->ops = media_ops;
 	media->ctx = media_ctx;
 	warn("media: %s new library", url);
 	if (oldpath)

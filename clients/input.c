@@ -484,6 +484,8 @@ int main(int argc, char **argv)
 				fd = open(optarg, O_RDONLY);
 				if (fd > 0)
 				{
+					int flags = fcntl(fd, F_GETFL, 0);
+					fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 					data.inputfd[nbinputs++] = fd;
 				}
 			break;

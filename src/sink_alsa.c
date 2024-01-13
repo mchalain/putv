@@ -331,7 +331,16 @@ static int _pcm_close(sink_ctx_t *ctx)
 
 static void _alsa_error(const char *file, int line, const char *function, int err, const char *fmt, ...)
 {
-	err("alsa: snd lib error (%d) %s %d into %s", err, file, line, function);
+	err("sink: alsa snd lib error (%d) %s %d into %s", err, file, line, function);
+}
+
+static void _sink_playerstate_cb(void *arg, event_t event, void *data)
+{
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	event_player_state_t *edata = (event_player_state_t *)data;
+	ctx->state = edata->state;
 }
 
 static const char *jitter_name = "alsa";
@@ -397,6 +406,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 		free(ctx);
 		return NULL;
 	}
+	player_eventlistener(player, _sink_playerstate_cb, ctx, "sink_alsa");
 
 #ifdef SINK_ALSA_MIXER
 	if (strncasecmp(ctx->mixerch, "disable", 7) &&
@@ -507,16 +517,18 @@ static void *sink_thread(void *arg)
 		ret = 0;
 		if (ctx->playback_handle)
 			ret = snd_pcm_wait(ctx->playback_handle, 1000);
+		if (ret == -ESTRPIPE) {
+			while ((ret = snd_pcm_resume(ctx->playback_handle)) == -EAGAIN)
+				sleep(1);
+		}
 		if (ret == -EPIPE)
 		{
-			/**
-			* This must never occure, the udp src needs to know
-			* how many PCM missing.
-			*/
-			err("alsa: pcm wait error %s", snd_strerror(ret));
-			warn("pcm recover");
-			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
-			player_state(ctx->player, STATE_STOP);
+			ret = snd_pcm_prepare(ctx->playback_handle);
+		}
+		if (ret < 0)
+		{
+			err("sink alsa: pcm wait error %s", snd_strerror(ret));
+			ctx->state = STATE_ERROR;
 			continue;
 		}
 
@@ -546,8 +558,11 @@ static void *sink_thread(void *arg)
 			if (buff == NULL)
 				continue;
 			length = ctx->in->ops->length(ctx->in->ctx);
-			_alsa_checksamplerate(ctx);
 		}
+		if (ctx->state == STATE_STOP)
+			_pcm_close(ctx);
+		else
+			_alsa_checksamplerate(ctx);
 		//snd_pcm_mmap_begin
 		if (length > 0 && ctx->playback_handle)
 		{
@@ -579,17 +594,8 @@ static void *sink_thread(void *arg)
 		else
 #endif
 			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-		if (ret < 0)
-		{
-			ctx->state = STATE_ERROR;
-			err("sink: error write pcm %s", snd_strerror(ret));
-		}
-		else
-		{
-			sink_dbg("sink: play %d", ret);
-		}
 	}
-	dbg("sink: thread end");
+	warn("sink: alsa thread end");
 #ifdef SINK_DUMP
 	close(ctx->dumpfd);
 #endif

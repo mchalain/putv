@@ -41,7 +41,7 @@ sbin-y:=
 lib-y:=
 slib-y:=
 modules-y:=
-modules-y:=
+include-y:=
 data-y:=
 doc-y:=
 hostbin-y:=
@@ -136,6 +136,9 @@ HOSTSTRIP=strip
 HOST_COMPILE:=$(shell LANG=C $(HOSTCC) -dumpmachine | $(AWK) -F- '{print $$1}')
 HOSTCCVERSION:=$(shell $(HOSTCC) -\#\#\#  2>&1 | $(GREP) -i " version ")
 
+ifneq ($(CROSS_COMPILE),)
+  CC=$(CROSS_COMPILE)gcc
+endif
 ifneq ($(CC),)
   CCVERSION:=$(shell $(CC) -\#\#\#  2>&1 | $(GREP) -i " version ")
   ARCH:=$(shell LANG=C $(CC) -dumpmachine | $(AWK) -F- '{print $$1}')
@@ -156,7 +159,7 @@ else
 endif
 
 ifneq ($(TOOLCHAIN),)
-  export PATH:=$(PATH):$(TOOLCHAIN):$(TOOLCHAIN)/bin
+  export PATH:=$(TOOLCHAIN):$(TOOLCHAIN)/bin:$(PATH)
 endif
 
 ifneq ($(dir $(CC)),./)
@@ -182,6 +185,15 @@ ifeq ($(findstring gcc,$(TARGETCC)),gcc)
   SYSROOT?=$(shell $(TARGETCC) -print-sysroot)
 endif
 
+ifeq ($(destdir),)
+  destdir:=$(abspath $(DESTDIR))
+  export destdir
+endif
+
+ifneq ($(CROSS_COMPILE),)
+  destdir?=$(sysroot)
+endif
+
 ifneq ($(SYSROOT),)
   sysroot:=$(patsubst "%",%,$(SYSROOT:%/=%))
 endif
@@ -201,14 +213,15 @@ ifneq ($(sysroot),)
     RPATHFLAGS+=-Wl,-rpath,$(strip $(pkglibdir))
     SYSROOT_LDFLAGS+=-L$(sysroot)$(strip $(pkglibdir))
   endif
-  ifneq ($(destdir),)
-    SYSROOT_CFLAGS+=-I$(destdir)$(strip $(includedir))
-    SYSROOT_LDFLAGS+=-L$(destdir)$(strip $(libdir))
-    SYSROOT_LDFLAGS+=-L$(destdir)$(strip $(pkglibdir))
-  endif
   PKG_CONFIG_PATH=""
   PKG_CONFIG_SYSROOT_DIR=$(sysroot)
   export PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_DIR
+endif
+
+ifneq ($(destdir),)
+  SYSROOT_CFLAGS+=-I$(destdir)$(strip $(includedir))
+  SYSROOT_LDFLAGS+=-L$(destdir)$(strip $(libdir))
+  SYSROOT_LDFLAGS+=-L$(destdir)$(strip $(pkglibdir))
 endif
 
 ARCH?=$(shell LANG=C $(TARGETCC) -dumpmachine | awk -F- '{print $$1}')
@@ -249,11 +262,16 @@ infodir?=$(datarootdir)/info
 localedir?=$(datarootdir)/locale
 mandir?=$(datarootdir)/man
 PATHES=prefix exec_prefix library_prefix bindir sbindir libexecdir libdir sysconfdir includedir datadir pkgdatadir pkglibdir localstatedir docdir builddir
-export $(PATHES)
-ifeq ($(destdir),)
-  destdir:=$(abspath $(DESTDIR))
-  export destdir
+ifneq ($(TOOLCHAIN),)
+  PATHES+=TOOLCHAIN
 endif
+ifneq ($(SYSROOT),)
+  PATHES+=SYSROOT
+endif
+ifneq ($(CROSS_COMPILE),)
+  PATHES+=CROSS_COMPILE
+endif
+export $(PATHES)
 
 INTERN_CFLAGS=-I.
 INTERN_CXXFLAGS=-I.
@@ -873,9 +891,6 @@ define cmd_generate_version_h
 	$(file > $@,$(call version_h))
 endef
 
-quiet_cmd_oldconfig=OLDCONFIG
-cmd_oldconfig=cat $(DEFCONFIG) | grep $(addprefix -e ,$(RESTCONFIGS)) >> $(CONFIG)
-
 ##
 # config rules
 ##
@@ -931,23 +946,26 @@ configfiles+=$(wildcard $(CONFIGFILE))
 configfiles+=$(wildcard $(VERSIONFILE))
 configfiles+=$(wildcard $(TMPCONFIG))
 configfiles+=$(wildcard $(PATHCACHE))
+
 cleanconfig: FORCE
 	@$(foreach file,$(configfiles), $(call cmd,clean,$(file));)
-
-$(CONFIG).old: $(CONFIG)
-	$(Q)$(if $<,mv $< $@)
 
 # set the list of configuration variables
 ifneq ($(wildcard $(DEFCONFIG)),)
 SETCONFIGS=$(shell cat $(DEFCONFIG) | sed 's/\"/\\\"/g' | grep -v '^\#' | awk -F= 't$$1 != t {print $$1}'; )
 UNSETCONFIGS=$(shell cat $(DEFCONFIG) | awk '/^. .* is not set/{print $$2}')
 endif
+
+# set to no all configs available into defconfig and not into .config
 CONFIGS:=$(SETCONFIGS) $(UNSETCONFIGS)
 $(foreach config,$(CONFIGS),$(eval $(config):=$(if $($(config)),$($(config)),n)))
 
 oldconfig: _info $(builddir) $(CONFIG) FORCE
 	@$(call cmd,clean,$(PATHCACHE))
 	$(Q)$(MAKE) _oldconfig
+
+quiet_cmd_oldconfig=OLDCONFIG
+cmd_oldconfig=cat $< | grep $(addprefix -e ,$(RESTCONFIGS)) >> $(CONFIG)
 
 _oldconfig: RESTCONFIGS:=$(foreach config,$(CONFIGS),$(if $($(config)),,$(config)))
 _oldconfig: $(DEFCONFIG) $(PATHCACHE)
@@ -971,16 +989,18 @@ $(DEFCONFIGFILES): %_defconfig: cleanconfig $(builddir)
 
 .PHONY: $(DEFCONFIGFILES)
 
-quiet_cmd__saveconfig=DEFCONFIG $(notdir $(DEFCONFIG))
-cmd__saveconfig=printf "$(foreach config,$(CONFIGS),$(config)=$($(config))\n)" > $(CONFIG)
+ifneq ($(TMPCONFIG),)
+
+quiet_cmd__saveconfig=DEFCONFIG $(notdir $<)
+define cmd__saveconfig
+ printf "$(foreach config,$(2),$(config)=$($(config))\n)" > $@
+endef
+
+$(CONFIG): $(DEFCONFIG) $(TMPCONFIG)
+	$(Q)$(call cmd,_saveconfig,$(CONFIGS))
 
 $(PATHCACHE):
-	@printf "$(foreach config,$(PATHES),$(config)=$($(config))\n)" > $@
-
-ifneq ($(TMPCONFIG),)
-$(CONFIG): $(TMPCONFIG)
-	$(Q)$(call cmd,_saveconfig)
-	$(Q)$(RM) $(TMPCONFIG)
+	$(Q)$(call cmd,_saveconfig,$(PATHES))
 
 # create a temporary defconfig file in the format of the config file
 $(TMPCONFIG): $(DEFCONFIG)
@@ -996,7 +1016,7 @@ $(TMPCONFIG): $(DEFCONFIG)
 # recipes) create the .config file with the variables from DEFCONFIG
 _defconfig: action:=_defconfig
 _defconfig: build:=$(action) TMPCONFIG= -f $(makemore) file
-_defconfig: $(CONFIG) $(PATHCACHE) $(subdir-target) _hook _configbuild _versionbuild ;
+_defconfig: $(PATHCACHE) $(CONFIG) $(subdir-target) _hook _configbuild _versionbuild ;
 	@:
 
 .PHONY:_defconfig
@@ -1016,4 +1036,69 @@ _defconfig: $(subdir-target) _hook;
 
 .PHONY:_defconfig
 endif # ifneq ($(TMPCONFIG),)
+ifneq ($(wildcard scripts/help.mk),)
+  HELP_OPTIONS+=_help_options_more
 endif
+ifneq ($(wildcard scripts/gcov.mk),)
+  HELP_ENTRIES+=_help_entries_gcov
+  HELP_OPTIONS+=_help_options_gcov
+endif
+ifneq ($(wildcard scripts/qt.mk),)
+  HELP_ENTRIES+=_help_entries_qt
+  HELP_OPTIONS+=_help_options_qt
+endif
+ifneq ($(wildcard scripts/download.mk),)
+  HELP_ENTRIES+=_help_entries_download
+  HELP_OPTIONS+=_help_options_download
+endif
+help: _help_main _help_options_main $(HELP_OPTIONS)
+	@
+
+_help_main:
+	@echo "makemore is a set of tools to build your program on every OS with only"
+	@echo "a compiler and "make" tools"
+
+_help_options_main:
+	@echo ""
+	@echo "Make accept several options:"
+	@echo " make defconfig :"
+	@echo "  options:"
+	@echo "    prefix=<directory path>      default /usr/local"
+	@echo "    exec_prefix=<directory path> default $$prefix"
+	@echo "    bindir=<directory path>      default $$exec_prefix/bin"
+	@echo "    sbindir=<directory path>     default $$exec_prefix/sbin"
+	@echo "    libdir=<directory path>      default $$exec_prefix/lib"
+	@echo "    includedir=<directory path>  default $$exec_prefix/include"
+	@echo "    sysconfdir=<directory path>  default $$exec_prefix/etc"
+	@echo "    pkglibdir=<directory path>   default $$exec_prefix/lib/<package>"
+	@echo "    datadir=<directory path>     default $$exec_prefix/share/<package>"
+	@echo ""
+	@echo "    builddir=<directory path>        default ."
+	@echo "    CROSS_COMPILE=<compiler prefix>  default empty"
+	@echo "    SYSROOT=<system root directory>  default empty or /"
+	@echo "    TOOLCHAIN=<directory path>       default empty"
+	@echo ""
+	@$(foreach config,$(CONFIGS),echo "    $(config)=<y|n>    default $($(config))";)
+	@echo ""
+	@echo " make <name>_defconfig : configuration from a file of \"configs\" directory"
+	@echo "  options: "
+	@echo "    as defconfig"
+	@echo ""
+	@echo " make all :"
+	@echo "  options: "
+	@echo "    DESTDIR=<directory path>     to search libraries into it default empty"
+	@echo "    V=<0|1>			to set verbosity default 0"
+	@echo "    G=<0|1>			to set gcov options default 0"
+	@echo "    DEBUG=<n|y>			to set the debug options default n"
+	@echo ""
+	@echo " make install :"
+	@echo "  options: "
+	@echo "    DESTDIR=<directory path>     to search libraries into it default empty"
+	@echo "    DEVINSTALL=<y|n>		to install header files default y"
+	@echo ""
+	@echo " make check : check all LIBRARY entries of the Makefile scripts"
+	@echo "  options: "
+	@echo ""
+
+endif
+

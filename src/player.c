@@ -431,7 +431,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			dbg("player: playing");
 			if (pause)
 				break;
-			int id;
+			int id = 0;
 			/// prepare nextsrc
 			if (ctx->media->ops->next)
 				id = ctx->media->ops->next(ctx->media->ctx);

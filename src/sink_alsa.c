@@ -474,6 +474,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	{
 		int size = ctx->buffersize;
 		int samplerate = ctx->in->ctx->frequence;
+		_pcm_close(ctx);
 		ret = _pcm_open(ctx, ctx->in->format, &samplerate, &size);
 		if (ret == 0)
 			ctx->samplerate = samplerate;
@@ -497,7 +498,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 
 static void *sink_thread(void *arg)
 {
-	int ret;
+	int ret = 0;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	int divider = ctx->samplesize * ctx->nchannels;
 
@@ -514,8 +515,7 @@ static void *sink_thread(void *arg)
 	while (ctx->state != STATE_ERROR)
 	{
 		unsigned char *buff = NULL;
-		ret = 0;
-		if (ctx->playback_handle)
+		if (! ret && ctx->playback_handle)
 			ret = snd_pcm_wait(ctx->playback_handle, 1000);
 		if (ret == -ESTRPIPE) {
 			while ((ret = snd_pcm_resume(ctx->playback_handle)) == -EAGAIN)
@@ -561,8 +561,12 @@ static void *sink_thread(void *arg)
 		}
 		if (ctx->state == STATE_STOP)
 			_pcm_close(ctx);
-		else
-			_alsa_checksamplerate(ctx);
+		else if (_alsa_checksamplerate(ctx) != 0)
+		{
+			err("sink: bad samplerate during running on alsa");
+			player_state(ctx->player, STATE_CHANGE);
+			continue;
+		}
 		//snd_pcm_mmap_begin
 		if (length > 0 && ctx->playback_handle)
 		{
@@ -570,7 +574,12 @@ static void *sink_thread(void *arg)
 #ifdef SINK_DUMP
 			write(ctx->dumpfd, buff, length);
 #endif
-			sink_dbg("sink: alsa write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
+			if (ret < 0)
+				err("sink alsa: pcm wait error %s", snd_strerror(ret));
+			else
+			{
+				sink_dbg("sink: alsa write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
+			}
 		}
 		else if (ctx->playback_handle)
 		{

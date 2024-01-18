@@ -80,12 +80,55 @@ struct encoder_ctx_s
 #endif
 
 #define NB_BUFFERS 6
-#define DEFAULT_NCHANNELS 2
+#ifndef DEFAULT_NCHANNELS
+# define DEFAULT_NCHANNELS 2
+#endif
 
 #if DEFAULT_NCHANNELS == 1
-#define LAME_NCHANNELS JOINT_STEREO
+# define LAME_NCHANNELS JOINT_STEREO
 #else
-#define LAME_NCHANNELS STEREO
+# define LAME_NCHANNELS STEREO
+#endif
+
+#if (DEFAULT_SAMPLERATE == 0) || ! defined(DEFAULT_SAMPLERATE)
+# warning samplerate set to 0
+# undef DEFAULT_SAMPLERATE
+# define 48000
+#endif
+
+#ifndef DEFAULT_SAMPLESIZE
+# define DEFAULT_SAMPLESIZE 2
+#endif
+
+#if defined(ENCODER_VBR) && ! defined(DEFAULT_BITRATE)
+# if DEFAULT_SAMPLERATE == 48000
+#  define DEFAULT_BITRATE 7
+# else
+#  define DEFAULT_BITRATE 4
+# endif
+#endif
+
+#ifndef DEFAULT_BITRATE
+# if DEFAULT_SAMPLERATE == 48000
+#  define DEFAULT_BITRATE 112
+# else
+#  define DEFAULT_BITRATE 128
+# endif
+#endif
+
+#if defined(ENCODER_VBR) && (DEFAULT_BITRATE > 10)
+# error Bitsrate for VBR is a factor in range 1 to 10
+#endif
+
+#if (DEFAULT_SAMPLESIZE == 2) && (DEFAULT_NCHANNELS == 2)
+# define INPUT_FORMAT PCM_16bits_LE_stereo
+#elif (DEFAULT_SAMPLESIZE == 2) && (DEFAULT_NCHANNELS == 1)
+# define INPUT_FORMAT PCM_16bits_LE_mono
+#elif (DEFAULT_SAMPLESIZE == 4) && (DEFAULT_NCHANNELS == 2)
+# define INPUT_FORMAT PCM_32bits_LE_stereo
+#else
+# warning format not supported
+# define INPUT_FORMAT PCM_16bits_LE_stereo
 #endif
 
 static const char *jitter_name = "lame encoder";
@@ -109,7 +152,6 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 	// nothing else
 	lame_set_quality(ctx->encoder, 5);
 	lame_set_mode(ctx->encoder, LAME_NCHANNELS);
-	//lame_set_mode(encoder->encoder, JOINT_STEREO);
 	lame_set_errorf(ctx->encoder, error_report);
 
 	// for CBR encoding
@@ -119,18 +161,10 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 	lame_set_out_samplerate(ctx->encoder, DEFAULT_SAMPLERATE);
 #ifdef ENCODER_VBR
 	lame_set_VBR(ctx->encoder, vbr_default);
-#if DEFAULT_SAMPLERATE == 48000
-	lame_set_VBR_q(ctx->encoder, 7);
-#else
-	lame_set_VBR_q(ctx->encoder, 4);
-#endif
+	lame_set_VBR_q(ctx->encoder, DEFAULT_BITRATE);
 #else
 	lame_set_VBR(ctx->encoder, vbr_off);
-#if DEFAULT_SAMPLERATE == 48000
-	lame_set_brate(ctx->encoder, 112);
-#else
-	lame_set_brate(ctx->encoder, 128);
-#endif
+	lame_set_brate(ctx->encoder, DEFAULT_BITRATE);
 #endif
 
 	lame_set_disable_reservoir(ctx->encoder, 1);
@@ -144,7 +178,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->ops = encoder_lame;
 	ctx->player = player;
 
-	encoder_lame_init(ctx, DEFAULT_SAMPLERATE, sizeof(signed short), 2);
+	encoder_lame_init(ctx, DEFAULT_SAMPLERATE, sizeof(signed short), DEFAULT_NCHANNELS);
 #ifdef ENCODER_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
@@ -155,27 +189,43 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
 	//ctx->samplesframe = 576;
 	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
-	dbg("encoder config :\n" \
+	warn(
+#ifdef ENCODER_VBR
+		"encoder MP3 config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
+		"\variatic bitrate %d\n" \
 		"\tnchannels %u",
+#else
+		"encoder MP3 config :\n" \
+		"\tbuffer size %lu\n" \
+		"\tsample rate %d\n" \
+		"\tsample size %d\n" \
+		"\tbitrate %d\n" \
+		"\tnchannels %u",
+#endif
 		buffsize,
 		ctx->samplerate,
 		ctx->samplesize,
-		ctx->nchannels);
-	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS,
-				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
-	ctx->in = jitter;
-	jitter->format = PCM_16bits_LE_stereo;
-	jitter->ctx->frequence = 0; // automatic freq
-	jitter->ctx->thredhold = 1;
+		DEFAULT_BITRATE,
+		LAME_NCHANNELS);
 
+	encoder_dbg("encoder: mp3 ready");
 	return ctx;
 }
 
 static jitter_t *encoder_jitter(encoder_ctx_t *ctx)
 {
+	if (ctx->in == NULL)
+	{
+		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS,
+					ctx->samplesframe * ctx->samplesize * ctx->nchannels);
+		ctx->in = jitter;
+		jitter->format = INPUT_FORMAT;
+		jitter->ctx->frequence = 0; // automatic freq
+		jitter->ctx->thredhold = 1;
+	}
 	return ctx->in;
 }
 
@@ -205,6 +255,7 @@ static void *lame_thread(void *arg)
 #ifdef ENCODER_HEARTBEAT
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
+	encoder_dbg("encoder: mp3 thread start");
 	while (run)
 	{
 		int ret = 0;
@@ -239,6 +290,8 @@ static void *lame_thread(void *arg)
 		else
 		{
 			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
+			if (ret < 0)
+				err("encoder: mp3 encoding error");
 			/* TODO : request media data from player to set new ID3 tag */
 			lame_init_bitstream(ctx->encoder);
 		}
@@ -264,6 +317,7 @@ static void *lame_thread(void *arg)
 			run = 0;
 		}
 	}
+	encoder_dbg("encoder: mp3 thread end");
 #ifdef ENCODER_HEARTBEAT
 	struct timespec stop = {0, 0};
 	clock_gettime(clockid, &stop);

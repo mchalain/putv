@@ -204,7 +204,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	 */
 	ctx->samplesframe = 576;
 	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
-	dbg("encoder config :\n" \
+	warn("encoder FLAC config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \

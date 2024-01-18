@@ -425,10 +425,16 @@ static void _src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
+static const char *_src_medium()
+{
+	return mime_octetstream;
+}
+
 const src_ops_t *src_alsa = &(src_ops_t)
 {
 	.name = "alsa",
 	.protocol = "pcm://|alsa://",
+	.medium = _src_medium,
 	.init = _src_init,
 	.run = _src_run,
 	.eventlistener = _src_eventlistener,

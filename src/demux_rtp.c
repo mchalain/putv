@@ -343,6 +343,7 @@ static void *demux_thread(void *arg)
 {
 	demux_ctx_t *ctx = (demux_ctx_t *)arg;
 	int run = 1;
+	demux_dbg("demux: thread start");
 	do
 	{
 		char *input;
@@ -360,6 +361,7 @@ static void *demux_thread(void *arg)
 		}
 		ctx->in->ops->pop(ctx->in->ctx, len);
 	} while (run);
+	demux_dbg("demux: thread end");
 	demux_out_t *out = ctx->out;
 	while (out != NULL)
 	{
@@ -512,7 +514,7 @@ static void demux_destroy(demux_ctx_t *ctx)
 	free(ctx);
 }
 
-const demux_ops_t *demux_rtp = &(demux_ops_t)
+const demux_ops_t *demux_rtp = &(const demux_ops_t)
 {
 	.name = "demux_rtp",
 	.protocol = "rtp",

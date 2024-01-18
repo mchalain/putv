@@ -314,10 +314,16 @@ static void _src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
+static const char *_src_medium()
+{
+	return mime_directory;
+}
+
 const src_ops_t *src_curl = &(src_ops_t)
 {
 	.name = "curl",
 	.protocol = "http://|https://|file://",
+	.medium = _src_medium,
 	.init = _src_init,
 	.prepare = _src_prepare,
 	.run = _src_run,

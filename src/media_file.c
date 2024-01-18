@@ -286,30 +286,54 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 	return OPTION_DISABLE;
 }
 
-static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
+static media_ctx_t *media_init(player_ctx_t *player, const char *arg,...)
 {
 	media_ctx_t *ctx = NULL;
 	const char *mime = NULL;
-	if (url)
+	const char *protocol = NULL;
+	const char *host = NULL;
+	const char *port = NULL;
+	const char *path = NULL;
+	const char *search = NULL;
+	void *data = utils_parseurl(arg, &protocol, &host, &port, &path, &search);
+	if (protocol)
 	{
-		mime = utils_getmime(url);
+		mime = utils_getmime(protocol);
 	}
-	if (mime != mime_octetstream)
+	if (path && mime == mime_directory)
 	{
-		ctx = calloc(1, sizeof(*ctx));
+		mime = utils_getmime(path);
+	}
+	if (mime == mime_octetstream && search)
+	{
+		const char *string = NULL;
+		string = strstr(search, "mime=");
+		if (string)
+		{
+			string += 5;
+			mime = utils_mime2mime(string);
+		}
+	}
+	ctx = calloc(1, sizeof(*ctx));
 #ifdef MEDIA_FILE_LIST
-		media_insert(ctx, url, NULL, mime);
-#else
-		media_url_t *media;
-		media = calloc(1, sizeof(*media));
-		media->url = strdup(url);
-		media->info = media_fillinfo(path, mime);
-		media->mime = mime;
-		media->id = 0;
-		ctx->media = media;
-#endif
-		warn("media url: %s", url);
+	if (media_insert(ctx, arg, NULL, mime) < 0)
+	{
+		free(ctx);
+		ctx = NULL;
 	}
+	else
+#else
+	media_url_t *media;
+	media = calloc(1, sizeof(*media));
+	media->url = strdup(arg);
+	media->info = media_fillinfo(path, mime);
+	media->mime = mime;
+	media->id = 0;
+	ctx->media = media;
+#endif
+	warn("media: url %s", arg);
+
+	free(data);
 	return ctx;
 }
 

@@ -114,8 +114,6 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	}
 	free(value);
 
-
-
 	int handle = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (handle == 0)
 	{
@@ -268,10 +266,16 @@ static void _src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
+static const char *_src_medium()
+{
+	return mime_octetstream;
+}
+
 const src_ops_t *src_unix = &(src_ops_t)
 {
 	.name = "unix",
 	.protocol = "unix://|file://",
+	.medium = _src_medium,
 	.init = _src_init,
 	.run = _src_run,
 	.mime = _src_mime,

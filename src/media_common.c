@@ -110,6 +110,9 @@ const char *utils_getmime(const char *path)
 	const char *mime = decoder_mime(path);
 	if (mime != NULL)
 		return mime;
+	mime = src_mime(path);
+	if (mime != NULL)
+		return mime;
 	struct stat statinfo;
 	if (stat(path, &statinfo) == 0 && S_ISDIR(statinfo.st_mode))
 		return mime_directory;
@@ -691,6 +694,7 @@ media_t *media_build(player_ctx_t *player, const char *url)
 	const media_ops_t *media_ops = NULL;
 	for (int i = 0; media_list[i] != NULL; i++)
 	{
+		dbg("media: try %s",media_list[i]->name);
 		media_ctx = media_list[i]->init(player, current_path);
 		if (media_ctx != NULL)
 		{

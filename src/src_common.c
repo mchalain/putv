@@ -52,13 +52,52 @@
 
 #define src_dbg(...)
 
-static src_t *_src_build(const src_ops_t *const src_list[],
-		player_ctx_t *player, const char *url,
-		const char *mime, const char *info)
+#define MAX_SRCOPS 10
+
+static void src_init(void) __attribute__((constructor));
+const src_ops_t *src_list[MAX_SRCOPS];
+
+static int _src_ops_register(const src_ops_t *srcops, const src_ops_t **list)
 {
-	const src_ops_t *src_ops = NULL;
+	for (int i = 0; i < MAX_SRCOPS; i++)
+	{
+		if (list[i] == NULL || list[i] == srcops)
+		{
+			list[i] = srcops;
+			return i;
+		}
+	}
+	return -1;
+}
+
+int src_ops_register(const src_ops_t *srcops)
+{
+	return _src_ops_register(srcops, src_list);
+}
+
+void src_init(void)
+{
+#ifdef SRC_FILE
+	src_ops_register(src_file);
+#endif
+#ifdef SRC_UNIX
+	src_ops_register(src_unix);
+#endif
+#ifdef SRC_CURL
+	src_ops_register(src_curl);
+#endif
+#ifdef SRC_ALSA
+	src_ops_register(src_alsa);
+#endif
+#ifdef SRC_UDP
+	src_ops_register(src_udp);
+#endif
+}
+
+static int _src_find(const src_ops_t *const src_list[],
+					const char *url)
+{
 	int i = 0;
-	src_ctx_t *src_ctx = NULL;
 	while (src_list[i] != NULL)
 	{
 		src_dbg("src: check %s", src_list[i]->name);
@@ -69,11 +108,10 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 			const char *next = strchr(protocol,'|');
 			if (next != NULL)
 				len = next - protocol;
+			src_dbg("src: check protocol %.*s", len, protocol);
 			if (!(strncmp(url, protocol, len)))
 			{
-				src_ctx = src_list[i]->init(player, url, mime);
-				src_ops = src_list[i];
-				break;
+				return i;
 			}
 			protocol = next;
 			if (protocol)
@@ -82,16 +120,25 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 				len = strlen(protocol);
 			}
 		}
-		if (src_ctx != NULL)
-			break;
 		i++;
 	}
-
-	if (src_ctx == NULL)
+	return -1;
+}
+static src_t *_src_build(const src_ops_t *const src_list[],
+		player_ctx_t *player, const char *url,
+		const char *mime, const char *info)
+{
+	const src_ops_t *src_ops = NULL;
+	src_ctx_t *src_ctx = NULL;
+	src_dbg("src: source %s", url);
+	int src_id = _src_find(src_list, url);
+	if (src_id < 0)
 	{
 		err("src not found %s", url);
 		return NULL;
 	}
+	src_ctx = src_list[src_id]->init(player, url, mime);
+	src_ops = src_list[src_id];
 	src_t *src = calloc(1, sizeof(*src));
 	src->ops = src_ops;
 	src->ctx = src_ctx;
@@ -104,25 +151,6 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 
 src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id, const char *info)
 {
-	const src_ops_t *const src_list[] = {
-	#ifdef SRC_FILE
-		src_file,
-	#endif
-	#ifdef SRC_UNIX
-		src_unix,
-	#endif
-	#ifdef SRC_CURL
-		src_curl,
-	#endif
-	#ifdef SRC_ALSA
-		src_alsa,
-	#endif
-	#ifdef SRC_UDP
-		src_udp,
-	#endif
-		NULL
-	};
-
 	src_t *src = _src_build(src_list, player, url, mime, info);
 	if (src != NULL)
 		src->mediaid = id;
@@ -137,20 +165,46 @@ void src_destroy(src_t *src)
 	free(src);
 }
 
+const char *_src_mime(const char *protocol, const src_ops_t *const *ops)
+{
+	int src_id = _src_find(ops, protocol);
+	if (src_id < 0)
+		return NULL;
+	return ops[src_id]->medium;
+}
+
+const char *src_mime(const char *protocol)
+{
+	return _src_mime(protocol, src_list);
+}
+
+#ifdef DEMUX_PASSTHROUGH
+static void demux_init(void) __attribute__((constructor));
+const src_ops_t *demux_list[MAX_SRCOPS];
+
+int demux_ops_register(const src_ops_t *srcops)
+{
+	return _src_ops_register(srcops, demux_list);
+}
+
+static void demux_init()
+{
+	demux_ops_register(demux_passthrough);
+#ifdef DEMUX_RTP
+	demux_ops_register(demux_rtp);
+#endif
+#ifdef DEMUX_DVB
+	demux_ops_register(demux_dvb);
+#endif
+}
+
+const char *demux_mime(const char *protocol)
+{
+	return _src_mime(protocol, demux_list);
+}
+
 demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
 {
-	const src_ops_t *const src_list[] = {
-	#ifdef DEMUX_PASSTHROUGH
-		demux_passthrough,
-	#endif
-	#ifdef DEMUX_RTP
-		demux_rtp,
-	#endif
-	#ifdef DEMUX_DVB
-		demux_dvb,
-	#endif
-		NULL
-	};
-
-	return _src_build(src_list, player, url, mime, NULL);
+	return _src_build(demux_list, player, url, mime, NULL);
 }
+#endif

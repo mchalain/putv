@@ -151,18 +151,15 @@ static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 	}
 
 	ret = bind(sock, addr, addrlen);
-	if (ret == 0)
-	{
-		int value=1;
-		ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
-	}
-	else
+	if (ret < 0)
 	{
 		err("src: bind error %s", strerror(errno));
 		goto err;
 	}
+	int value=1;
+	ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 
-	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(htonl(inaddr)))
+	if ((af == AF_INET) && IN_MULTICAST(htonl(inaddr)))
 	{
 		struct ip_mreq imreq;
 		memset(&imreq, 0, sizeof(struct ip_mreq));
@@ -178,7 +175,7 @@ static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 			goto err;
 		}
 	}
-	else if ((ret == 0) && (af == AF_INET6) && IN6_IS_ADDR_MULTICAST(&in6addr))
+	else if ((af == AF_INET6) && IN6_IS_ADDR_MULTICAST(&in6addr))
 	{
 		struct ipv6_mreq imreq;
 		memset(&imreq, 0, sizeof(struct ip_mreq));
@@ -455,8 +452,10 @@ static int _src_run(src_ctx_t *ctx)
 
 static const char *_src_mime(src_ctx_t *ctx, int index)
 {
-	if (index > 0)
-		return NULL;
+	if (index == -1)
+		return mime_octetstream;
+	if (ctx->demux->ctx && ctx->demux->ops->mime)
+		return ctx->demux->ops->mime(ctx->demux->ctx, index);
 	return ctx->mime;
 }
 
@@ -562,10 +561,16 @@ static void _src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
-const src_ops_t *src_udp = &(src_ops_t)
+static const char *_src_medium()
+{
+	return mime_octetstream;
+}
+
+const src_ops_t *src_udp = &(const src_ops_t)
 {
 	.name = "udp",
 	.protocol = "udp://|rtp://",
+	.medium = _src_medium,
 	.init = _src_init,
 	.run = _src_run,
 	.eventlistener = _src_eventlistener,

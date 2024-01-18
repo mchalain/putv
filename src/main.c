@@ -83,7 +83,9 @@ static void _autostart(union sigval arg)
 {
 	player_ctx_t *player = (player_ctx_t *)arg.sival_ptr;
 	if (player_state(player, STATE_UNKNOWN) != STATE_PLAY)
+	{
 		player_state(player, STATE_PLAY);
+	}
 	usleep(100 * 1000);
 	if (player_mediaid(player) < 0)
 	{

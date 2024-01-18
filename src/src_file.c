@@ -85,12 +85,15 @@ static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	if (ret > 0 && FD_ISSET(ctx->fd,&rfds))
 	{
 		ret = read(ctx->fd, buff, len);
+		if (ret != len)
+		{
+			src_dbg("src: read %d %d/%d", ctx->fd, ret, len);
+		}
 	}
 	else if (ret == 0)
 	{
 		warn("src: timeout");
 	}
-	src_dbg("src: read %d %d", ctx->fd, ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
@@ -114,9 +117,9 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 		fd = 0;
 	else
 	{
-		char *protocol = NULL;
-		char *path = NULL;
-		char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+		const char *protocol = NULL;
+		const char *path = NULL;
+		void *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
 		if (protocol && strcmp(protocol, "file") != 0)
 		{
 			return NULL;
@@ -261,7 +264,7 @@ static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 	return ctx->estream;
 }
 
-const char *_src_mime(src_ctx_t *ctx, int index)
+static const char *_src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
@@ -287,10 +290,16 @@ static void _src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
+static const char *_src_medium()
+{
+	return mime_directory;
+}
+
 const src_ops_t *src_file = &(src_ops_t)
 {
 	.name = "file",
 	.protocol = "file://",
+	.medium = _src_medium,
 	.init = _src_init,
 	.prepare = _src_prepare,
 	.run = _src_run,

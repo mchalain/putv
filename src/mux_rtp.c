@@ -168,6 +168,7 @@ static void *mux_thread(void *arg)
 	mux_ctx_t *ctx = (mux_ctx_t *)arg;
 	heartbeat_t *heart = NULL;
 	int heartset = 0;
+	mux_dbg("mux: rtp thread start");
 	while (run)
 	{
 		run = 0;
@@ -190,6 +191,7 @@ static void *mux_thread(void *arg)
 			run = 1;
 		}
 	}
+	mux_dbg("mux: rtp thread end");
 	return (void *)(intptr_t)result;
 }
 
@@ -243,7 +245,7 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 		if (ctx->estreams[i].pt == 0)
 			ctx->estreams[i].pt = pt;
 		ctx->estreams[i].mime = mime;
-		warn("sink: rtp attach %s %d", mime, ctx->estreams[i].pt);
+		warn("sink: rtp attach %s to pt %d", mime, ctx->estreams[i].pt);
 	}
 	return 0;
 }

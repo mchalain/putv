@@ -78,9 +78,9 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
 
-	char *protocol = NULL;
-	char *path = NULL;
-	char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+	const char *protocol = NULL;
+	const char *path = NULL;
+	void *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
 	if (protocol && strcmp(protocol, "unix") != 0)
 	{
 		free(value);

@@ -177,7 +177,7 @@ char *utils_getpath(const char *url, const char *proto, char **query, int strict
 	return newpath;
 }
 
-char *utils_parseurl(const char *url, char **protocol, char **host, char **port, char **path, char **search)
+void *utils_parseurl(const char *url, const char **protocol, const char **host, const char **port, const char **path, const char **search)
 {
 	char *turl = malloc(strlen(url) + 1 + 1);
 	strcpy(turl, url);
@@ -228,9 +228,11 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 		}
 		else
 		{
+			/// We want to keep the first / of the path
 			memmove(str_path + 1, str_path, strlen(str_path) + 1);
 			*str_path = '\0';
 			str_path += 1;
+			str_search = strchr(str_path, '?');
 		}
 	}
 	if (str_search != NULL)

@@ -99,14 +99,14 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	int ret = 0;
 	const encoder_ops_t *encoder = encoder_lame;
 
-	char *protocol = NULL;
-	char *host = NULL;
-	char *port = NULL;
-	char *path = NULL;
-	char *search = NULL;
+	const char *protocol = NULL;
+	const char *host = NULL;
+	const char *port = NULL;
+	const char *path = NULL;
+	const char *search = NULL;
 	in_addr_t if_addr = INADDR_ANY;
 
-	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
+	void *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
 	if (protocol == NULL)
 	{

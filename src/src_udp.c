@@ -218,13 +218,13 @@ err:
 
 static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *mime)
 {
-	char *protocol = NULL;
-	char *host = NULL;
-	char *port = NULL;
-	char *path = NULL;
-	char *search = NULL;
+	const char *protocol = NULL;
+	const char *host = NULL;
+	const char *port = NULL;
+	const char *path = NULL;
+	const char *search = NULL;
 
-	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
+	void *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
 	int iport = 4400;
 	if (port != NULL)
@@ -241,11 +241,16 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	mime = utils_mime2mime(mime);
 
 	if (protocol == NULL)
+	{
+		free(value);
 		return NULL;
-
+	}
 	demux_t *demux = demux_build(player, url, mime);
 	if (demux == NULL)
+	{
+		free(value);
 		return NULL;
+	}
 
 	src_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));

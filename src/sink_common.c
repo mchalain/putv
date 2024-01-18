@@ -54,17 +54,17 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	if (!strcmp(arg, "none"))
 		return NULL;
 	int i = 0;
-	char *protocol = NULL;
-	char *host = NULL;
-	char *port = NULL;
-	char *path = NULL;
-	char *search = NULL;
-	char *url = utils_parseurl(arg, &protocol, &host, &port, &path, &search);
+	const char *protocol = NULL;
+	const char *host = NULL;
+	const char *port = NULL;
+	const char *path = NULL;
+	const char *search = NULL;
+	void *data = utils_parseurl(arg, &protocol, &host, &port, &path, &search);
 	if (protocol == NULL)
 		protocol = arg;
 	while (sinklist[i] != NULL)
 	{
-		dbg("sink: test %s", sinklist[i]->name);
+		sink_dbg("sink: test %s", sinklist[i]->name);
 		int len = strlen(sinklist[i]->name);
 		if (protocol && !strcmp(sinklist[i]->name, protocol))
 			break;
@@ -79,6 +79,6 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	if (_sink.ctx == NULL)
 		return NULL;
 	_sink.ops = sinkops;
-	free(url);
+	free(data);
 	return &_sink;
 }

@@ -29,12 +29,12 @@ extern const char* const str_likes;
 void utils_srandom();
 const char *utils_getmime(const char *path);
 char *utils_getpath(const char *url, const char *proto, char **query, int strict);
-char *utils_parseurl(const char *url,
-								char **protocol,
-								char **host,
-								char **port,
-								char **path,
-								char **search);
+void *utils_parseurl(const char *url,
+								const char **protocol,
+								const char **host,
+								const char **port,
+								const char **path,
+								const char **search);
 const char *utils_mime2mime(const char *mime);
 const char *utils_format2mime(jitter_format_t format);
 

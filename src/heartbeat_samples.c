@@ -64,26 +64,8 @@ static heartbeat_ctx_t *heartbeat_init(void *arg)
 	heartbeat_samples_t *config = (heartbeat_samples_t *)arg;
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = config->samplerate;
-	ctx->nchannels = 2;
-	switch (config->format)
-	{
-	case PCM_16bits_LE_mono:
-		ctx->nchannels = 1;
-	case PCM_16bits_LE_stereo:
-		ctx->samplesize = 2;
-	break;
-	case PCM_24bits3_LE_stereo:
-		ctx->samplesize = 2;
-	break;
-	case PCM_24bits4_LE_stereo:
-	case PCM_32bits_LE_stereo:
-	case PCM_32bits_BE_stereo:
-		ctx->samplesize = 2;
-	break;
-	default:
-		ctx->samplesize = 4;
-	break;
-	}
+	ctx->nchannels = FORMAT_NCHANNELS(config->format);
+	ctx->samplesize = FORMAT_SAMPLESIZE(config->format) / 8;
 	if (config->nchannels != 0)
 		ctx->nchannels = config->nchannels;
 

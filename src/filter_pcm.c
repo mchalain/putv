@@ -34,7 +34,7 @@
 
 #include "media.h"
 
-# define SIZEOF_INT 4
+#define SIZEOF_INT 4
 
 #if SIZEOF_INT >= 4
 typedef   signed int sample_t;
@@ -55,15 +55,21 @@ struct sampled_ctx_s
 	sampled_ctx_t *next;
 };
 
-struct filter_ctx_s
+typedef struct filter_inout_s filter_inout_t;
+struct filter_inout_s
 {
-	sample_get_t get;
-	sampled_ctx_t *sampled;
 	unsigned int samplerate;
 	unsigned char samplesize;
 	unsigned char shift;
 	unsigned char nchannels;
 	unsigned char channel;
+};
+
+struct filter_ctx_s
+{
+	sample_get_t get;
+	sampled_ctx_t *sampled;
+	filter_inout_t input;
 #ifdef FILTER_DUMP
 	int dumpfd;
 #endif
@@ -108,51 +114,18 @@ static int filter_set(filter_ctx_t *ctx, ...)
 	va_end(params);
 }
 
-static int filter_setformat(filter_ctx_t *ctx, jitter_format_t format)
+static int filter_setformat(filter_ctx_t *ctx, filter_inout_t *inout, jitter_format_t format)
 {
-	unsigned char samplesize = 4;
-	unsigned char shift = 24;
-	unsigned char nchannels = 2;
-	switch (format)
-	{
-	case PCM_8bits_mono:
-		samplesize = 2;
-		shift = 8;
-		nchannels = 1;
-	break;
-	case PCM_16bits_LE_mono:
-		samplesize = 2;
-		shift = 16;
-		nchannels = 1;
-	break;
-	case PCM_16bits_LE_stereo:
-		samplesize = 2;
-		shift = 16;
-		nchannels = 2;
-	break;
-	case PCM_24bits3_LE_stereo:
-		samplesize = 3;
-		shift = 24;
-		nchannels = 2;
-	break;
-	case PCM_24bits4_LE_stereo:
-		samplesize = 4;
-		shift = 24;
-		nchannels = 2;
-	break;
-	case PCM_32bits_BE_stereo:
-	case PCM_32bits_LE_stereo:
-		samplesize = 4;
-		shift = 32;
-		nchannels = 2;
-	break;
-	default:
-		err("decoder out format not supported %d", format);
-		return -1;
-	}
-	ctx->samplesize = samplesize;
-	ctx->shift = shift;
-	ctx->nchannels = nchannels;
+	unsigned char samplesize = FORMAT_SAMPLESIZE(format) / 8;
+	unsigned char shift = FORMAT_SHIFT(format);
+	unsigned char nchannels = FORMAT_NCHANNELS(format);
+	inout->samplesize = samplesize;
+	inout->shift = shift;
+	inout->nchannels = nchannels;
+	warn("filter: input");
+	warn("\tsamplesize %d", samplesize);
+	warn("\tchannels %d", nchannels);
+	warn("\tshift %d", shift);
 	return 0;
 }
 
@@ -170,12 +143,13 @@ static int filter_setoptions(filter_ctx_t *ctx, va_list params)
 			ctx->sampled = sampleditem;
 			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
 			ctx->sampled->arg = (void *) va_arg(params, void *);
+			dbg("sampled %p", ctx->sampled->cb);
 		break;
 		case FILTER_FORMAT:
-			filter_setformat(ctx, (jitter_format_t) va_arg(params, jitter_format_t));
+			filter_setformat(ctx, &ctx->input, (jitter_format_t) va_arg(params, jitter_format_t));
 		break;
 		case FILTER_SAMPLERATE:
-			ctx->samplerate = (unsigned int) va_arg(params, unsigned int);
+			ctx->input.samplerate = (unsigned int) va_arg(params, unsigned int);
 		break;
 		}
 		code = (int) va_arg(params, int);
@@ -189,7 +163,7 @@ static void filter_destroy(filter_ctx_t *ctx)
 	while (sampleditem != NULL)
 	{
 		ctx->sampled = sampleditem->next;
-		sampleditem->cb(sampleditem->arg, INT32_MIN, ctx->samplesize, ctx->samplerate, 0);
+		sampleditem->cb(sampleditem->arg, INT32_MIN, ctx->input.samplesize, ctx->input.samplerate, 0);
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}
@@ -209,26 +183,26 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 		sampleditem = sampleditem->next;
 	}
 #if FILTER_DUMP == 3
-	write(ctx->dumpfd, &sample, ctx->samplesize);
+	write(ctx->dumpfd, &sample, ctx->input.samplesize);
 #endif
 
 	int i = 0, j = 0;
-	for (i = 0; i < ctx->samplesize; i++)
+	for (i = 0; i < ctx->input.samplesize; i++)
 	{
-		if ((i * 8) < (ctx->shift - bitspersample))
+		if ((i * 8) < (ctx->input.shift - bitspersample))
 		{
 			out[i] = 0;
 			j++;
 			continue;
 		}
-		if ((i * 8) > (ctx->shift))
+		if ((i * 8) > (ctx->input.shift))
 		{
 			out[i] = 0;
 			continue;
 		}
 		out[i] = sample >> ((i - j) * 8);
 	}
-	return ctx->samplesize;
+	return ctx->input.samplesize;
 }
 
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
@@ -256,23 +230,26 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 	for (i = 0; i < audio->nsamples; i++)
 	{
 		sample_t sample;
-		for (j = 0; j < ctx->nchannels; j++)
+		for (j = 0; j < ctx->input.nchannels; j++)
 		{
 			if (bufferlen >= size)
 				goto filter_exit;
 
 			sample = get(ctx, audio, j, i);
 #if FILTER_DUMP == 1
-			write(ctx->dumpfd, &sample, ctx->samplesize);
+			write(ctx->dumpfd, &sample, ctx->input.samplesize);
 #endif
 			int len = sampled_change(ctx, sample, audio->bitspersample,
 					audio->samplerate, j, buffer + bufferlen);
 #if FILTER_DUMP == 2
-			write(ctx->dumpfd, &buffer[bufferlen], ctx->samplesize);
+			write(ctx->dumpfd, &buffer[bufferlen], ctx->input.samplesize);
 #endif
 			bufferlen += len;
 		}
 	}
+#if FILTER_DUMP == 4
+	write(ctx->dumpfd, buffer, bufferlen);
+#endif
 filter_exit:
 	audio->nsamples -= i;
 	for (j = 0; j < audio->nchannels; j++)

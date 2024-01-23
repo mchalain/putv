@@ -175,12 +175,13 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->player = player;
 
 	jitter_format_t format = PCM_24bits4_LE_stereo;
+	//jitter_format_t format = PCM_24bits3_LE_stereo;
+	//jitter_format_t format = PCM_16bits_LE_stereo;
 
-	ctx->nchannels = 2;
+	ctx->nchannels = FORMAT_NCHANNELS(format);
 	ctx->samplerate = DEFAULT_SAMPLERATE;
-	ctx->samplesize = sizeof(uint32_t);
-	ctx->samplesframe = SAMPLES_FRAME;
-	//ctx->samplesframe = LATENCY * DEFAULT_SAMPLERATE / 1000;
+	ctx->samplesize = FORMAT_SAMPLESIZE(format);
+	
 	// in streaminfg, the number of samples is clearly unknown => 0
 	ctx->maxframes = 0;
 	// otherwise
@@ -188,7 +189,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 
 	ctx->encoder = FLAC__stream_encoder_new();
 
-	if (encoder_flac_init(ctx) < 0)
+	if (encoder_flac_init(ctx, format) < 0)
 	{
 		free(ctx);
 		err("encoder: DISABLE flac error");

@@ -96,9 +96,8 @@ struct encoder_ctx_s
 # define 48000
 #endif
 
-#ifndef DEFAULT_SAMPLESIZE
-# define DEFAULT_SAMPLESIZE 2
-#endif
+// Lame supports only u16 samples
+#define INPUT_FORMAT PCM_16bits_LE_stereo
 
 #if defined(ENCODER_VBR) && ! defined(DEFAULT_BITRATE)
 # if DEFAULT_SAMPLERATE == 48000
@@ -120,17 +119,6 @@ struct encoder_ctx_s
 # error Bitsrate for VBR is a factor in range 1 to 10
 #endif
 
-#if (DEFAULT_SAMPLESIZE == 2) && (DEFAULT_NCHANNELS == 2)
-# define INPUT_FORMAT PCM_16bits_LE_stereo
-#elif (DEFAULT_SAMPLESIZE == 2) && (DEFAULT_NCHANNELS == 1)
-# define INPUT_FORMAT PCM_16bits_LE_mono
-#elif (DEFAULT_SAMPLESIZE == 4) && (DEFAULT_NCHANNELS == 2)
-# define INPUT_FORMAT PCM_32bits_LE_stereo
-#else
-# warning format not supported
-# define INPUT_FORMAT PCM_16bits_LE_stereo
-#endif
-
 static const char *jitter_name = "lame encoder";
 void error_report(const char *format, va_list ap)
 {
@@ -147,7 +135,7 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 	ctx->samplerate = samplerate;
 	lame_set_num_channels(ctx->encoder, nchannels);
 	ctx->nchannels = nchannels;
-	ctx->samplesize = samplesize;
+	ctx->samplesize = samplesize / 8;
 	// this value change the complexity and the time of compression
 	// nothing else
 	lame_set_quality(ctx->encoder, 5);
@@ -178,9 +166,12 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->ops = encoder_lame;
 	ctx->player = player;
 
-	encoder_lame_init(ctx, DEFAULT_SAMPLERATE, sizeof(signed short), DEFAULT_NCHANNELS);
-#ifdef ENCODER_DUMP
+	encoder_lame_init(ctx, DEFAULT_SAMPLERATE, FORMAT_SAMPLESIZE(INPUT_FORMAT), FORMAT_NCHANNELS(INPUT_FORMAT));
+#if ENCODER_DUMP == 1
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
+#endif
+#if ENCODER_DUMP == 2
+	ctx->dumpfd = open("lame_dump.wav", O_RDWR | O_CREAT, 0644);
 #endif
 	/**
 	 * set samples frame to 3 framesize to have less than 1500 bytes
@@ -276,14 +267,16 @@ static void *lame_thread(void *arg)
 		}
 		if (ctx->inbuffer)
 		{
+#if ENCODER_DUMP == 2
+			if (ctx->dumpfd > 0)
+				write(ctx->dumpfd, ctx->inbuffer, inlength);
+#endif
 			ret = lame_encode_buffer_interleaved(ctx->encoder,
 					(short int *)ctx->inbuffer, inlength,
 					ctx->outbuffer, ctx->out->ctx->size);
-#ifdef ENCODER_DUMP
+#if ENCODER_DUMP == 1
 			if (ctx->dumpfd > 0 && ret > 0)
-			{
 				write(ctx->dumpfd, ctx->outbuffer, ret);
-			}
 #endif
 			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
 		}

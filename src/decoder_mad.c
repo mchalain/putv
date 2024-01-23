@@ -341,7 +341,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->out = jitter;
 	if (ctx->filter)
 	{
-		if (jitter->format > JITTER_24BITS4_INTERLEAVED)
+		if (FORMAT_SAMPLESIZE(jitter->format) == 32)
 			rescale_init(&ctx->rescale, 24, 0);
 		else
 			rescale_init(&ctx->rescale, 0, jitter->format);

@@ -92,50 +92,49 @@ typedef struct pcm_config_s
 	pa_sample_format_t pa_format;
 } pcm_config_t;
 
-static int _pa_config(jitter_format_t format, pcm_config_t *config)
+int pa_format_from(jitter_format_t format)
 {
-	jitter_format_t downformat = format;
 	switch (format)
 	{
 		case PCM_32bits_LE_stereo:
 			config->pa_format = PA_SAMPLE_S32LE;
-			downformat = PCM_24bits4_LE_stereo;
-			config->samplesize = 4;
-			config->nchannels = 2;
 		break;
 		case PCM_24bits4_LE_stereo:
 			config->pa_format = PA_SAMPLE_S24_32LE;
-			downformat = PCM_16bits_LE_stereo;
-			config->samplesize = 4;
-			config->nchannels = 2;
 		break;
 		case PCM_24bits3_LE_stereo:
 			config->pa_format = PA_SAMPLE_S24LE;
-			downformat = PCM_16bits_LE_stereo;
-			config->samplesize = 3;
-			config->nchannels = 2;
 		break;
 		case PCM_16bits_LE_stereo:
 			config->pa_format = PA_SAMPLE_S16LE;
-			config->samplesize = 2;
-			config->nchannels = 2;
 		break;
 		case PCM_16bits_LE_mono:
 			config->pa_format = PA_SAMPLE_S16LE;
-			config->samplesize = 2;
-			config->nchannels = 1;
 		break;
 		case PCM_8bits_mono:
 			config->pa_format = PA_SAMPLE_U8;
-			downformat = PCM_16bits_LE_mono;
-			config->samplesize = 1;
-			config->nchannels = 1;
 		break;
-		default:
-			err("format not found");
-			config->pa_format = PA_SAMPLE_S16LE;
-			config->samplesize = 2;
-			config->nchannels = 2;
+	}
+	return PA_SAMPLE_S16LE;
+}
+
+static int _pa_config(jitter_format_t format, pcm_config_t *config)
+{
+	jitter_format_t downformat = format;
+	config->pa_format = pa_format_from(format);
+	config->samplesize = FORMAT_SAMPLESIZE(format) / 8;
+	config->nchannels = FORMAT_NCHANNELS(format);
+	switch (format)
+	{
+		case PCM_32bits_LE_stereo:
+			downformat = PCM_24bits4_LE_stereo;
+		break;
+		case PCM_24bits4_LE_stereo:
+		case PCM_24bits3_LE_stereo:
+			downformat = PCM_16bits_LE_stereo;
+		break;
+		case PCM_8bits_mono:
+			downformat = PCM_16bits_LE_mono;
 		break;
 	}
 	return downformat;

@@ -64,6 +64,9 @@ struct src_ctx_s
 #include "media.h"
 #include "decoder.h"
 
+// function defined inside sink_alsa.c
+int pcm_format_from(jitter_format_t format);
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -75,6 +78,7 @@ struct src_ctx_s
 #define src_dbg(...)
 
 #define LATENCY 0
+#define INPUT_FORMAT PCM_32bits_LE_stereo
 
 static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int rate, unsigned long *size)
 {
@@ -177,15 +181,18 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 {
 	int count = 2;
 	int samplerate = DEFAULT_SAMPLERATE;
-	snd_pcm_format_t format = SND_PCM_FORMAT_S32_LE;
-	int nchannels = 2, samplesize =4;
+	jitter_format_t format = INPUT_FORMAT;
 	src_ctx_t *ctx = NULL;
-	const char *soundcard;
-	char *setting;
+	const char *soundcard = NULL;
+	const char *setting;
 
-	soundcard = utils_getpath(url, "alsa://", &setting, 1);
-	if (soundcard == NULL)
-		soundcard = utils_getpath(url, "pcm://", &setting, 1);
+	const char *protocol = NULL;
+	const char *host = NULL;
+	const char *port = NULL;
+	const char *path = NULL;
+	const char *search = NULL;
+
+	void *value = utils_parseurl(url, &protocol, &host, &port, &soundcard, &setting);
 	if (soundcard == NULL)
 	{
 		soundcard = url;
@@ -204,23 +211,19 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 				setting += 8;
 				if (!strncmp(setting, "8", 4))
 				{
-					format = SND_PCM_FORMAT_S8;
-					samplesize = 1;
+					format = PCM_8bits_mono;
 				}
 				if (!strncmp(setting, "16le", 4))
 				{
-					format = SND_PCM_FORMAT_S16_LE;
-					samplesize = 2;
+					format = PCM_16bits_LE_stereo;
 				}
 				if (!strncmp(setting, "24le", 4))
 				{
-					format = SND_PCM_FORMAT_S24_3LE;
-					samplesize = 3;
+					format = PCM_24bits4_LE_stereo;
 				}
 				if (!strncmp(setting, "32le", 4))
 				{
-					format = SND_PCM_FORMAT_S32_LE;
-					samplesize = 4;
+					format = PCM_32bits_LE_stereo;
 				}
 			}
 			if (!strncmp(setting + 1, "samplerate=", 11))
@@ -237,8 +240,8 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 		ctx->handle = handle;
 		dbg("src: %s on %s", src_alsa->name, soundcard);
 		ctx->format = format;
-		ctx->samplesize = samplesize;
-		ctx->nchannels = nchannels;
+		ctx->samplesize = FORMAT_SAMPLESIZE(format) / 8;
+		ctx->nchannels = FORMAT_NCHANNELS(format);
 		ctx->samplerate = samplerate;
 		ctx->periodsize = LATENCY * 1000 / ctx->samplerate;
 	}
@@ -339,7 +342,7 @@ static int _src_prepare(src_ctx_t *ctx, const char *info)
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
-	_pcm_open(ctx, ctx->format, ctx->samplerate, &ctx->periodsize);
+	_pcm_open(ctx, pcm_format_from(ctx->format), ctx->samplerate, &ctx->periodsize);
 	return 0;
 }
 
@@ -360,7 +363,7 @@ static int _src_run(src_ctx_t *ctx)
 		int divider = ctx->samplesize * ctx->nchannels;
 		ctx->periodsize = (ctx->out->ctx->size / divider) * 5;
 		dbg("src: latency %lums", (ctx->periodsize * 1000) / ctx->samplerate);
-		_pcm_open(ctx, ctx->format, ctx->samplerate, &ctx->periodsize);
+		_pcm_open(ctx, pcm_format_from(ctx->format), ctx->samplerate, &ctx->periodsize);
 	}
 	pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 	return 0;

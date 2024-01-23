@@ -129,44 +129,48 @@ typedef struct pcm_config_s
 	snd_pcm_format_t pcm_format;
 } pcm_config_t;
 
+int pcm_format_from(jitter_format_t format)
+{
+	switch(format)
+	{
+		case PCM_32bits_LE_stereo:
+			return SND_PCM_FORMAT_S32_LE;
+		break;
+		case PCM_24bits4_LE_stereo:
+			return SND_PCM_FORMAT_S24_LE;
+		break;
+		case PCM_24bits3_LE_stereo:
+			return SND_PCM_FORMAT_S24_3LE;
+		break;
+		case PCM_16bits_LE_stereo:
+			return SND_PCM_FORMAT_S16_LE;
+		break;
+		case PCM_16bits_LE_mono:
+			return SND_PCM_FORMAT_S16_LE;
+		break;
+		case PCM_8bits_mono:
+			return SND_PCM_FORMAT_S8;
+		break;
+	}
+	return 0;
+}
+
 static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 {
 	jitter_format_t downformat = format;
+	config->pcm_format = pcm_format_from(format);
+	config->samplesize = FORMAT_SAMPLESIZE(format) / 8;
+	config->nchannels = FORMAT_NCHANNELS(format);
 	switch (format)
 	{
 		case PCM_32bits_LE_stereo:
-			config->pcm_format = SND_PCM_FORMAT_S32_LE;
 			downformat = PCM_24bits4_LE_stereo;
-			config->samplesize = 4;
-			config->nchannels = 2;
 		break;
 		case PCM_24bits4_LE_stereo:
-			config->pcm_format = SND_PCM_FORMAT_S24_LE;
-			downformat = PCM_16bits_LE_stereo;
-			config->samplesize = 4;
-			config->nchannels = 2;
-		break;
 		case PCM_24bits3_LE_stereo:
-			config->pcm_format = SND_PCM_FORMAT_S24_3LE;
 			downformat = PCM_16bits_LE_stereo;
-			config->samplesize = 3;
-			config->nchannels = 2;
-		break;
-		case PCM_16bits_LE_stereo:
-			config->pcm_format = SND_PCM_FORMAT_S16_LE;
-			config->samplesize = 2;
-			config->nchannels = 2;
-		break;
-		case PCM_16bits_LE_mono:
-			config->pcm_format = SND_PCM_FORMAT_S16_LE;
-			config->samplesize = 2;
-			config->nchannels = 1;
-		break;
 		case PCM_8bits_mono:
-			config->pcm_format = SND_PCM_FORMAT_S8;
 			downformat = PCM_16bits_LE_mono;
-			config->samplesize = 2;
-			config->nchannels = 1;
 		break;
 	}
 	return downformat;
@@ -287,7 +291,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate
 	snd_pcm_hw_params_get_periods(hw_params, &periods, 0);
 	unsigned int periodtime = 0;
 	snd_pcm_hw_params_get_period_time(hw_params, &periodtime, 0);
-	dbg("sink alsa config :\n" \
+	warn("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tperiod size %lu\n" \
 		"\tnb periods %d\n" \
@@ -438,6 +442,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, ctx->buffersize);
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
+	err("sink: jitter format %#x", jitter->format);
 	ctx->in = jitter;
 
 #ifdef SAMPLERATE_AUTO

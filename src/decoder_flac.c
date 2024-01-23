@@ -44,7 +44,7 @@ struct decoder_ctx_s
 	const decoder_ops_t *ops;
 	FLAC__StreamDecoder *decoder;
 	int nchannels;
-	int samplerate;
+	uint32_t samplerate;
 	pthread_t thread;
 	jitter_t *in;
 	unsigned char *inbuffer;
@@ -148,7 +148,18 @@ output_cb(const FLAC__StreamDecoder *decoder,
 
 	/* pcm->samplerate contains the sampling frequency */
 
-	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
+	uint32_t samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
+	if (ctx->samplerate == 0)
+	{
+		ctx->samplerate = samplerate;
+		warn("decoder: flac file samplerate %d Hz", ctx->samplerate);
+	}
+	else if (ctx->samplerate != samplerate)
+	{
+		ctx->samplerate = samplerate;
+		warn("decoder: flac file samplerate %d Hz CHANGING", ctx->samplerate);
+	}
+	audio.samplerate = samplerate;
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);

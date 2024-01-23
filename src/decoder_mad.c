@@ -61,6 +61,8 @@ struct decoder_ctx_s
 	rescale_t rescale;
 	player_ctx_t *player;
 
+	uint32_t samplerate;
+
 	heartbeat_t heartbeat;
 	beat_samples_t beat;
 	mad_timer_t position;
@@ -158,6 +160,16 @@ enum mad_flow output(void *data,
 	decoder_dbg("duration 2 %lu.%02lums", duration / 100, duration % 100);
 #endif
 
+	if (ctx->samplerate == 0)
+	{
+		ctx->samplerate = pcm->samplerate;
+		warn("decoder: mp3 file samplerate %d Hz", ctx->samplerate);
+	}
+	else if (ctx->samplerate != pcm->samplerate)
+	{
+		ctx->samplerate = pcm->samplerate;
+		warn("decoder: mp3 file samplerate %d Hz CHANGING", ctx->samplerate);
+	}
 	audio.samplerate = pcm->samplerate;
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;

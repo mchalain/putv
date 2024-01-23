@@ -62,6 +62,8 @@ struct decoder_ctx_s
 	rescale_t rescale;
 	player_ctx_t *player;
 
+	uint32_t samplerate;
+
 	heartbeat_t heartbeat;
 	unsigned int nloops;
 	int bitspersample;
@@ -110,6 +112,17 @@ static uint32_t uint32(char *buff)
 static int _faad_output(decoder_ctx_t *ctx, NeAACDecFrameInfo *frameInfo, void *samples)
 {
 	filter_audio_t audio;
+
+	if (ctx->samplerate == 0)
+	{
+		ctx->samplerate = frameInfo->samplerate;
+		warn("decoder: aac file samplerate %d Hz", ctx->samplerate);
+	}
+	else if (ctx->samplerate != frameInfo->samplerate)
+	{
+		ctx->samplerate = frameInfo->samplerate;
+		warn("decoder: aac file samplerate %d Hz CHANGING", ctx->samplerate);
+	}
 	audio.samplerate = frameInfo->samplerate;
 	audio.bitspersample = ctx->bitspersample;
 	audio.regain = 0;

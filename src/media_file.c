@@ -289,20 +289,20 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 static media_ctx_t *media_init(player_ctx_t *player, const char *arg,...)
 {
 	media_ctx_t *ctx = NULL;
-	const char *mime = NULL;
+	const char *mime = mime_octetstream;
 	const char *protocol = NULL;
 	const char *host = NULL;
 	const char *port = NULL;
 	const char *path = NULL;
 	const char *search = NULL;
 	void *data = utils_parseurl(arg, &protocol, &host, &port, &path, &search);
-	if (protocol)
-	{
-		mime = utils_getmime(protocol);
-	}
-	if (path && mime == mime_directory)
+	if (path)
 	{
 		mime = utils_getmime(path);
+	}
+	if (protocol && mime == mime_octetstream)
+	{
+		mime = utils_getmime(protocol);
 	}
 	if (mime == mime_octetstream && search)
 	{

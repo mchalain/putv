@@ -87,6 +87,7 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 	decoder_ctx_t *ctx = NULL;
 	const decoder_ops_t *ops = NULL;
 	int i = 0;
+	decoder_dbg("decoder: search for %s", mime);
 	if (mime)
 	{
 		while (decoderslist[i] != NULL)

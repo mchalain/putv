@@ -686,7 +686,6 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	int ret = -1;
 	int id = 0;
 
 	if (json_is_object(json_params))
@@ -694,17 +693,17 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 		id = json_integer_value(json_object_get(json_params, "id"));
 	}
 	cmds_dbg("cmds: setnext id %d", id);
-	ret = player_play(ctx->player, id);
-	if (ret == 0)
-	{
-		*result = json_pack("{s:i}", "next", id);
-		ret = 0;
-	}
-	else
+	id = player_play(ctx->player, id);
+	if (id < 0)
 	{
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
 	}
-	return ret;
+	else
+	{
+		*result = json_pack("{s:i}", "next", id);
+		return 0;
+	}
+	return -1;
 }
 
 static int method_getposition(json_t *json_params, json_t **result, void *userdata)

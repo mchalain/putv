@@ -137,6 +137,7 @@ static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
 
 		mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
 		ctx->header.b.pt = pt;
+		// copy header
 		memcpy(outbuffer, &ctx->header, len);
 		ctx->header.b.m = 0;
 		ctx->header.b.seqnum++;
@@ -152,6 +153,7 @@ static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
 			fprintf(stderr, "%.2hhx ", outbuffer[i]);
 		fprintf(stderr, "\n");
 #endif
+		// copy payload
 		memcpy(outbuffer + len, inbuffer, inlength);
 		len += inlength;
 
@@ -168,6 +170,10 @@ static void *mux_thread(void *arg)
 	mux_ctx_t *ctx = (mux_ctx_t *)arg;
 	heartbeat_t *heart = NULL;
 	int heartset = 0;
+	for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
+	{
+		warn("mux: rtp stream %u %u %s",ctx->header.ssrc, ctx->estreams[i].pt, ctx->estreams[i].mime);
+	}
 	mux_dbg("mux: rtp thread start");
 	while (run)
 	{
@@ -216,7 +222,8 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 	}
 	if ( i < MAX_ESTREAM)
 	{
-		int size = ctx->out->ctx->size - sizeof(rtpheader_t) - sizeof(uint32_t);
+	//	int size = ctx->out->ctx->size - sizeof(ctx->header) - sizeof(uint32_t);
+		int size = ctx->out->ctx->size - sizeof(ctx->header);
 		unsigned char pt;
 		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
 		jitter->ctx->frequence = 0;
@@ -245,7 +252,7 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 		if (ctx->estreams[i].pt == 0)
 			ctx->estreams[i].pt = pt;
 		ctx->estreams[i].mime = mime;
-		warn("sink: rtp attach %s to pt %d", mime, ctx->estreams[i].pt);
+		warn("mux: rtp attach %s to pt %d", mime, ctx->estreams[i].pt);
 	}
 	return 0;
 }

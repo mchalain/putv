@@ -369,6 +369,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 
 const encoder_ops_t *encoder_flac = &(encoder_ops_t)
 {
+	.name = "flac",
 	.init = encoder_init,
 	.type = ES_AUDIO,
 	.jitter = encoder_jitter,

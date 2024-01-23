@@ -129,6 +129,12 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	if (search != NULL)
 	{
 		const char *string = NULL;
+		string = strstr(search, "mime=");
+		if (string)
+		{
+			string += 5;
+			mime = utils_mime2mime(string);
+		}
 		string = strstr(search, "pt=");
 		if (string != NULL)
 		{
@@ -140,7 +146,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
 	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
 	demux_rtp_addprofile(ctx, 46, mime_audioflac);
-	warn("demux add %s %d", mime, pt);
+	warn("demux: add profile %s on %d", mime, pt);
 	demux_rtp_addprofile(ctx, pt, mime);
 
 #ifdef DEMUX_DUMP
@@ -209,14 +215,18 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out = out->next;
 	if (out == NULL)
 	{
+		const char * mime = mime_octetstream;
+		mime = demux_profile(ctx, header->b.pt);
+		warn("demux: new rtp substream %d %s(%d)", header->ssrc, mime, header->b.pt);
+		if (mime == mime_octetstream)
+			return -1;
 		out = calloc(1, sizeof(*out));
+		out->mime = mime;
 		out->ssrc = header->ssrc;
 		out->cc = header->b.cc;
-		out->mime = mime_octetstream;
-		out->mime = demux_profile(ctx, header->b.pt);
 		out->next = ctx->out;
 		ctx->out = out;
-		warn("demux: new rtp substream %d %s(%d)", out->ssrc, out->mime, header->b.pt);
+		warn("demux: new rtp substream %d %s(%d)", header->ssrc, out->mime, header->b.pt);
 		event_listener_t *listener = ctx->listener;
 		const src_t src = { .ops = demux_rtp, .ctx = ctx };
 		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};
@@ -334,7 +344,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out->data = NULL;
 	}
 	else
-		exit(0);
+		len = -1;
 #endif
 	return len;
 }
@@ -357,7 +367,9 @@ static void *demux_thread(void *arg)
 		{
 			len = ctx->in->ops->length(ctx->in->ctx);
 			if ( demux_parseheader(ctx, input, len) < 0)
-				run = 0;
+			{
+				demux_dbg("demux: rtp stream unknown");
+			}
 		}
 		ctx->in->ops->pop(ctx->in->ctx, len);
 	} while (run);
@@ -428,9 +440,10 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 		out = out->next;
 		index--;
 	}
+	const char *mime = ctx->mime;
 	if (out != NULL)
-		return out->mime;
-	return ctx->mime;
+		mime = out->mime;
+	return mime;
 }
 
 static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)

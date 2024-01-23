@@ -388,8 +388,8 @@ static void *_src_thread(void *arg)
 static int _src_wait(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
-	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
 	ctx->demux->ops->run(ctx->demux->ctx);
+	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
 #else
 	const src_t src = { .ops = src_udp, .ctx = ctx};
 	event_new_es_t event = {.pid = 0, .src = &src, .mime = ctx->mime, .jitte = JITTE_HIGH};

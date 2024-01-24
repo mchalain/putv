@@ -53,6 +53,9 @@ struct encoder_ctx_s
 #define dbg(...)
 #endif
 
+#define OUTPUT_FORMAT PCM_16bits_LE_stereo
+#define OUTPUT_SAMPLERATE 44100
+
 static encoder_ctx_t *encoder_init(player_ctx_t *ctx)
 {
 	encoder_ctx_t *encoder = calloc(1, sizeof(*encoder));
@@ -77,6 +80,20 @@ static const char *encoder_mime(encoder_ctx_t *encoder)
 	return mime_audiopcm;
 }
 
+static int encoder_samplerate(encoder_ctx_t *encoder)
+{
+	if (encoder->inout)
+		return encoder->inout->ctx->frequence;
+	return OUTPUT_SAMPLERATE;
+}
+
+static jitter_format_t encoder_format(encoder_ctx_t *encoder)
+{
+	if (encoder->inout)
+		return encoder->inout->format;
+	return OUTPUT_FORMAT;
+}
+
 static void encoder_destroy(encoder_ctx_t *encoder)
 {
 	free(encoder);
@@ -90,5 +107,7 @@ const encoder_ops_t *encoder_passthrough = &(encoder_ops_t)
 	.jitter = encoder_jitter,
 	.run = encoder_run,
 	.mime = encoder_mime,
+	.samplerate = encoder_samplerate,
+	.format = encoder_format,
 	.destroy = encoder_destroy,
 };

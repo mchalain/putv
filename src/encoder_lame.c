@@ -342,9 +342,19 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static const char *encoder_mime(encoder_ctx_t *encoder)
+static const char *encoder_mime(encoder_ctx_t *ctx)
 {
 	return mime_audiomp3;
+}
+
+static int encoder_samplerate(encoder_ctx_t *ctx)
+{
+	return ctx->samplerate;
+}
+
+static jitter_format_t encoder_format(encoder_ctx_t *ctx)
+{
+	return MPEG2_3_MP3;
 }
 
 static void encoder_destroy(encoder_ctx_t *ctx)
@@ -372,5 +382,7 @@ const encoder_ops_t *encoder_lame = &(encoder_ops_t)
 	.jitter = encoder_jitter,
 	.run = encoder_run,
 	.mime = encoder_mime,
+	.samplerate = encoder_samplerate,
+	.format = encoder_format,
 	.destroy = encoder_destroy,
 };

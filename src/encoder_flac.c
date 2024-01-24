@@ -377,9 +377,19 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	return ret;
 }
 
-static const char *encoder_mime(encoder_ctx_t *encoder)
+static const char *encoder_mime(encoder_ctx_t *ctx)
 {
 	return mime_audioflac;
+}
+
+static int encoder_samplerate(encoder_ctx_t *ctx)
+{
+	return ctx->samplerate;
+}
+
+static jitter_format_t encoder_format(encoder_ctx_t *ctx)
+{
+	return FLAC;
 }
 
 static void encoder_destroy(encoder_ctx_t *ctx)
@@ -409,5 +419,7 @@ const encoder_ops_t *encoder_flac = &(encoder_ops_t)
 	.jitter = encoder_jitter,
 	.run = encoder_run,
 	.mime = encoder_mime,
+	.samplerate = encoder_samplerate,
+	.format = encoder_format,
 	.destroy = encoder_destroy,
 };

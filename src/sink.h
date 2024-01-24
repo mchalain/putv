@@ -3,6 +3,7 @@
 
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
+typedef struct encoder_s encoder_t;
 typedef struct encoder_ops_s encoder_ops_t;
 
 #ifndef SINK_CTX
@@ -14,7 +15,7 @@ struct sink_ops_s
 	const char *name;
 	const char *default_;
 	sink_ctx_t *(*init)(player_ctx_t *, const char *soundcard);
-	unsigned int (*attach)(sink_ctx_t *, const char *mime);
+	unsigned int (*attach)(sink_ctx_t *, encoder_t *encoder);
 	jitter_t *(*jitter)(sink_ctx_t *, unsigned int index);
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);

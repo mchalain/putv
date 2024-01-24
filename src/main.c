@@ -142,7 +142,7 @@ static encoder_t *main_encoder(player_ctx_t *player, sink_t *sink)
 		return NULL;
 	}
 	// retreive an index of jitter for this kind of encoder
-	int index = sink->ops->attach(sink->ctx, encoder->ops->mime(encoder->ctx));
+	int index = sink->ops->attach(sink->ctx, encoder);
 	jitter_t *sink_jitter;
 	sink_jitter = sink->ops->jitter(sink->ctx, index);
 

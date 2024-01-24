@@ -148,7 +148,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, encoder_t *encoder)
 {
 	return 0;
 }

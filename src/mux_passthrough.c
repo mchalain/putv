@@ -34,7 +34,7 @@
 #include <string.h>
 
 #include "player.h"
-#include "decoder.h"
+#include "encoder.h"
 #include "event.h"
 typedef struct mux_s mux_t;
 typedef struct mux_ops_s mux_ops_t;
@@ -79,9 +79,9 @@ static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 	return 0;
 }
 
-static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
+static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t *encoder)
 {
-	ctx->mime = mime;
+	ctx->mime = encoder->ops->mime(encoder->ctx);
 	return 0;
 }
 

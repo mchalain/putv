@@ -298,10 +298,10 @@ static sink_ctx_t *sink_init_rtp(player_ctx_t *player, const char *url)
 	return sink_init(player, url);
 }
 
-static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, encoder_t *encoder)
 {
 #ifdef MUX
-	return ctx->mux->ops->attach(ctx->mux->ctx, mime);
+	return ctx->mux->ops->attach(ctx->mux->ctx, encoder);
 #else
 	return 0;
 #endif
@@ -312,7 +312,9 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 #ifdef MUX
 	return ctx->mux->ops->jitter(ctx->mux->ctx, index);
 #else
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 #endif
 }
 
@@ -327,7 +329,7 @@ static void *sink_thread(void *arg)
 	int run = 1;
 
 	/* start decoding */
-	dbg("sink: thread run");
+	dbg("sink: udp run");
 	int ret;
 #ifdef USE_REALTIME
 	cpu_set_t cpuset;

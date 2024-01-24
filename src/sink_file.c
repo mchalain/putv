@@ -118,7 +118,7 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 	return NULL;
 }
 
-static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, encoder_t *encoder)
 {
 	return 0;
 }

@@ -35,7 +35,7 @@
 #include <pthread.h>
 
 #include "player.h"
-#include "decoder.h"
+#include "encoder.h"
 #include "rtp.h"
 typedef struct mux_s mux_t;
 typedef struct mux_ops_s mux_ops_t;
@@ -208,8 +208,9 @@ static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 	return 0;
 }
 
-static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
+static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t * encoder)
 {
+	const char *mime = encoder->ops->mime(encoder->ctx);
 	if (ctx->out == NULL)
 		return (unsigned int)-1;
 	int i;
@@ -226,12 +227,12 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 		int size = ctx->out->ctx->size - sizeof(ctx->header);
 		unsigned char pt;
 		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
-		jitter->ctx->frequence = 0;
+		jitter->ctx->frequence = encoder->ops->samplerate(encoder->ctx);
 		jitter->ctx->thredhold = 3;
+		jitter->format = encoder->ops->format(encoder->ctx);
 		if (mime == mime_audiomp3)
 		{
 			pt = 14;
-			jitter->format = MPEG2_3_MP3;
 		}
 		else if (mime == mime_audiopcm)
 		{
@@ -241,12 +242,10 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 		else if (mime == mime_audioflac)
 		{
 			pt = 46;
-			jitter->format = FLAC;
 		}
 		else
 		{
 			pt = 99;
-			jitter->format = SINK_BITSSTREAM;
 		}
 		ctx->estreams[i].in = jitter;
 		if (ctx->estreams[i].pt == 0)

@@ -86,12 +86,51 @@ struct encoder_ctx_s
 #define DEFAULT_SAMPLERATE 44100
 #endif
 
-#define SAMPLES_FRAME 400
+//#define SAMPLES_FRAME 400
+#define SAMPLES_FRAME 300
 #define NB_BUFFERS 6
 #define LATENCY 200 //ms
 #define MAX_SAMPLES (44100 * 60 * 2)
 
 static const char *jitter_name = "flac encoder";
+
+static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, size_t bytes)
+{
+	if (bytes == 0)
+		return 0;
+	size_t length = 0;
+	if (ctx->outbuffer == NULL)
+	{
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	}
+
+	if (ctx->outbuffer != NULL)
+	{
+		length = (ctx->out->ctx->size > bytes)? bytes:ctx->out->ctx->size - 1;
+		memcpy(ctx->outbuffer, buffer, length);
+
+		encoder_dbg("encoder: flac %lu", length);
+		beat_bitrate_t *beat = NULL;
+		ctx->outbuffer = NULL;
+#ifdef ENCODER_HEARTBEAT
+		if (length == bytes)
+		{
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			ctx->beat.length = ctx->samplesframe;
+			beat = &ctx->beat;
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+		}
+#endif
+		ctx->out->ops->push(ctx->out->ctx, length, beat);
+
+	}
+	else
+	{
+		warn("encoder: jitter out closed");
+		length = (size_t)-1;
+	}
+	return length;
+}
 
 static FLAC__StreamEncoderWriteStatus
 _encoder_writecb(const FLAC__StreamEncoder *encoder,
@@ -107,61 +146,46 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 	int check = 1;
 #ifdef ENCODER_DUMP
 	if (ctx->dumpfd > 0)
-	{
 		write(ctx->dumpfd, buffer, bytes);
-	}
 #endif
 //	if (samples == 0)
 //		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
-	int ret = 0;
-	if (ctx->outbuffer == NULL)
+	size_t length;
+	while ( (length = encoder_output(ctx, buffer, bytes)) > 0 )
 	{
-		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		if ((length == ((size_t) -1)))
+			return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+		bytes -= length;
+		buffer += length;
 	}
-
-	if (ctx->outbuffer != NULL && ctx->out->ctx->size >= bytes)
-	{
-		memcpy(ctx->outbuffer, buffer, bytes);
-		ret = bytes;
-	}
-	else if (ctx->outbuffer == NULL)
-		warn("encoder: jitter closed");
-	else
-		warn("encoder: jitter too small %lu bytes for %ld", bytes, ctx->out->ctx->size);
-	if (ret > 0)
-	{
-		encoder_dbg("encoder: flac %d", ret);
-		beat_bitrate_t *beat = NULL;
-#ifdef ENCODER_HEARTBEAT
-		//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-		ctx->beat.length = ctx->samplesframe;
-		beat = &ctx->beat;
-		//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-#endif
-		ctx->out->ops->push(ctx->out->ctx, bytes, beat);
-		ctx->outbuffer = NULL;
-
-		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
-	}
-	return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
+	return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 }
 
-static int encoder_flac_init(encoder_ctx_t *ctx)
+static int encoder_flac_init(encoder_ctx_t *ctx, jitter_format_t format)
 {
 	int ret = 0;
 
 	/** reinitialize the encoder **/
-	FLAC__stream_encoder_finish(ctx->encoder);
+	//FLAC__stream_encoder_finish(ctx->encoder);
 
-	ret = FLAC__stream_encoder_set_verify(ctx->encoder, true);
-	FLAC__stream_encoder_set_streamable_subset(ctx->encoder, true);
+	/**
+	 * the samples frame must be up to 4608 bytes to be streamable
+	 */
+	ctx->samplesframe = 1024;
+	ret = FLAC__stream_encoder_set_streamable_subset(ctx->encoder, true);
+	if (ret)
+		err("encoder: error with flac stream already set");
+	FLAC__stream_encoder_set_verify(ctx->encoder, false);
+	FLAC__stream_encoder_set_do_exhaustive_model_search(ctx->encoder, true);
+	FLAC__stream_encoder_set_do_mid_side_stereo(ctx->encoder, true);
 	FLAC__stream_encoder_set_sample_rate(ctx->encoder, ctx->samplerate);
-	FLAC__stream_encoder_set_bits_per_sample(ctx->encoder, 24);
+	int samplesize = ctx->samplesize > 3? 24:ctx->samplesize * 8;
+	FLAC__stream_encoder_set_bits_per_sample(ctx->encoder, samplesize);
 	FLAC__stream_encoder_set_channels(ctx->encoder, ctx->nchannels);
-	FLAC__stream_encoder_set_compression_level(ctx->encoder, 2);
-	FLAC__stream_encoder_set_blocksize(ctx->encoder, SAMPLES_FRAME);
-//	FLAC__stream_encoder_set_blocksize(ctx->encoder, 0);
-	FLAC__stream_encoder_set_total_samples_estimate(ctx->encoder, ctx->maxframes * ctx->samplesframe);
+	FLAC__stream_encoder_set_compression_level(ctx->encoder, 5);
+	FLAC__stream_encoder_set_blocksize(ctx->encoder, ctx->samplesframe);
+	FLAC__stream_encoder_set_max_lpc_order(ctx->encoder, 12);
+	FLAC__stream_encoder_set_max_residual_partition_order(ctx->encoder, 8);
 
 	ctx->framescnt = 0;
 	dbg("flac: initialized");
@@ -180,7 +204,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 
 	ctx->nchannels = FORMAT_NCHANNELS(format);
 	ctx->samplerate = DEFAULT_SAMPLERATE;
-	ctx->samplesize = FORMAT_SAMPLESIZE(format);
+	ctx->samplesize = FORMAT_SAMPLESIZE(format) / 8;
 	
 	// in streaminfg, the number of samples is clearly unknown => 0
 	ctx->maxframes = 0;
@@ -199,18 +223,15 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->dumpfd = open("dump.flac", O_RDWR | O_CREAT, 0644);
 	err("dump %d", ctx->dumpfd);
 #endif
-	/**
-	 * set samples frame to 3 framesize to have less than 1500 bytes
-	 * but more than 1000 bytes into the output
-	 */
-	ctx->samplesframe = 576;
 	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
 	warn("encoder FLAC config :\n" \
 		"\tbuffer size %lu\n" \
+		"\tsamples frame %u\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
 		buffsize,
+		ctx->samplesframe,
 		ctx->samplerate,
 		ctx->samplesize,
 		ctx->nchannels);
@@ -254,14 +275,15 @@ static void *_encoder_thread(void *arg)
 		int ret = 0;
 
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
-		inlength /= ctx->samplesize * ctx->nchannels;
-		if (inlength < ctx->samplesframe)
-			warn("encoder: flac frame too small %d %ld", inlength, ctx->in->ctx->size);
+		size_t samplescnt = ctx->in->ops->length(ctx->in->ctx);
+		samplescnt /= ctx->samplesize * ctx->nchannels;
+		if (samplescnt < ctx->samplesframe)
+			warn("encoder: flac frame too small %lu %ld", samplescnt, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
+#ifdef ENCODER_CHANGE_FRAMERATE
 			ctx->samplerate = ctx->in->ctx->frequence;
-			encoder_flac_init(ctx);
+			encoder_flac_init(ctx, ctx->in->format);
 
 			FLAC__StreamEncoderInitStatus init_status;
 			init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
@@ -270,12 +292,19 @@ static void *_encoder_thread(void *arg)
 				err("encoder: flac initializing encoder: %s\n", FLAC__StreamEncoderInitStatusString[init_status]);
 				ret = -1;
 			}
+#else
+			/// refuse to change SAMPLE RATE
+			err("encoder: impossible to change frame rate use %u", ctx->samplerate);
+			player_state(ctx->player, STATE_CHANGE);
+			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
+#endif
+
 		}
 		ctx->framescnt++;
 		if (ctx->maxframes && ctx->framescnt > ctx->maxframes)
 		{
 			warn("encoder: max flac frames");
-			encoder_flac_init(ctx);
+			encoder_flac_init(ctx, ctx->in->format);
 
 			FLAC__StreamEncoderInitStatus init_status;
 			init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
@@ -287,8 +316,9 @@ static void *_encoder_thread(void *arg)
 
 		if (ctx->inbuffer)
 		{
+			encoder_dbg("encoder: process %lu/%lu samples", ctx->samplesframe, samplescnt);
 			ret = FLAC__stream_encoder_process_interleaved(ctx->encoder,
-					(int *)ctx->inbuffer, inlength);
+					(int *)ctx->inbuffer, samplescnt);
 			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
 		}
 		if (ret < 0)
@@ -322,7 +352,10 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	FLAC__StreamEncoderInitStatus init_status;
 	init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
 	if(init_status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
-		err("encoder: flac initializing encoder: %s\n", FLAC__StreamEncoderInitStatusString[init_status]);
+		err("encoder: flac initializing encoder: %s", FLAC__StreamEncoderInitStatusString[init_status]);
+		FLAC__StreamEncoderState state;
+		state = FLAC__stream_encoder_get_state(ctx->encoder);
+		err("encoder: flac encoder state: %s", FLAC__StreamEncoderStateString[state]);
 		ret = -1;
 	}
 

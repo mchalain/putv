@@ -46,6 +46,7 @@ typedef struct src_ops_s demux_ops_t;
 #define NB_BUFFERS 8
 #define BUFFERSIZE 1500
 
+#ifdef DEMUX_RTP_REORDER
 typedef struct demux_reorder_s demux_reorder_t;
 struct demux_reorder_s
 {
@@ -54,6 +55,7 @@ struct demux_reorder_s
 	char id;
 	char ready;
 };
+#endif
 
 typedef struct demux_out_s demux_out_t;
 struct demux_out_s
@@ -83,10 +85,13 @@ struct demux_ctx_s
 	demux_out_t *out;
 	jitter_t *in;
 	jitte_t jitte;
+	unsigned short nbbuffers;
 	unsigned short seqnum;
 	unsigned short seqorig;
 	unsigned long missing;
-	demux_reorder_t reorder[NB_BUFFERS];
+#ifdef DEMUX_RTP_REORDER
+	demux_reorder_t *reorder;
+#endif
 	const char *mime;
 	uint32_t sessionid;
 	pthread_t thread;
@@ -125,7 +130,10 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	demux_profile_t *profile = NULL;
-
+	ctx->nbbuffers = NB_BUFFERS;
+#ifdef DEMUX_RTP_REORDER
+	ctx->reorder = calloc(ctx->nbbuffers, sizeof(*ctx->reorder));
+#endif
 	char pt = 20;
 	const char *search = strchr(url, '?');
 	if (search != NULL)
@@ -142,6 +150,12 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 		{
 			string += 3;
 			sscanf(string, "%hhd", &pt);
+		}
+		string = strstr(search, "nbuf=");
+		if (string != NULL)
+		{
+			string += 5;
+			sscanf(string, "%hd", &ctx->nbbuffers);
 		}
 	}
 
@@ -162,7 +176,7 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
-		int nbbuffers = NB_BUFFERS << jitte;
+		int nbbuffers = ctx->nbbuffers << jitte;
 		ctx->in = jitter_init(JITTER_TYPE_SG, jitter_name, nbbuffers, BUFFERSIZE);
 #ifdef USE_REALTIME
 		ctx->in->ops->lock(ctx->in->ctx);
@@ -239,7 +253,10 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	}
 	/// player currently support only one session
 	if (ctx->sessionid != 0 && ctx->sessionid != header->ssrc)
+	{
+		warn("demux: bad rtp session");
 		return -1;
+	}
 	demux_out_t *out;
 	out = ctx->out;
 	while (out != NULL && out->ssrc != header->ssrc)
@@ -274,8 +291,8 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		}
 	}
 #ifdef DEMUX_RTP_REORDER
-	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % NB_BUFFERS];
-	int id = header->b.seqnum % (NB_BUFFERS * NB_LOOPS);
+	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % ctx->nbbuffers];
+	int id = header->b.seqnum % (ctx->nbbuffers * NB_LOOPS);
 
 	if (out->jitter != NULL && reorder->ready && reorder->id != id)
 	{
@@ -310,6 +327,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		if (ctx->seqnum == 0)
 			ctx->seqorig = ctx->seqnum = header->b.seqnum - 1;
 		ctx->seqnum++;
+		unsigned long missing = 0;
 		while (ctx->seqnum < header->b.seqnum)
 		{
 #if 0
@@ -329,9 +347,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
 			out->data = NULL;
 #endif
-			ctx->missing++;
-			warn("demux: packet missing %ld/%d", ctx->missing, ctx->seqnum - ctx->seqorig);
+			missing++;
 			ctx->seqnum++;
+		}
+		if (missing > 0)
+		{
+			ctx->missing += missing;
+			warn("demux: %lu packet missing %u", missing, ctx->seqnum - ctx->seqorig);
 		}
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);

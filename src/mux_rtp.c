@@ -45,6 +45,8 @@ typedef struct mux_estream_s
 	const char *mime;
 	jitter_t *in;
 	unsigned char pt;
+	void *ext;
+	uint16_t extlen;
 } mux_estream_t;
 #define MAX_ESTREAM 2
 struct mux_ctx_s
@@ -124,10 +126,11 @@ static jitter_t *mux_jitter(mux_ctx_t *ctx, unsigned int index)
 	return NULL;
 }
 
-static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
+static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 {
 	void *beat = NULL;
 	char *inbuffer;
+	jitter_t *in = estream->in;
 	inbuffer = in->ops->peer(in->ctx, &beat);
 	unsigned long inlength = in->ops->length(in->ctx);
 	if (inbuffer != NULL)
@@ -136,7 +139,7 @@ static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
 		char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 
 		mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
-		ctx->header.b.pt = pt;
+		ctx->header.b.pt = estream->pt;
 		// copy header
 		memcpy(outbuffer, &ctx->header, len);
 		ctx->header.b.m = 0;
@@ -145,6 +148,12 @@ static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
 		{
 			ctx->header.b.seqnum = 0;
 			ctx->header.b.m = 1;
+		}
+		if (estream->extlen > 0 && estream->ext)
+		{
+			ctx->header.b.x = 1;
+			memcpy(outbuffer + len, estream->ext, estream->extlen);
+			len += estream->extlen;
 		}
 #ifdef DEBUG_0
 		int i;
@@ -188,7 +197,7 @@ static void *mux_thread(void *arg)
 				ctx->out->ops->heartbeat(ctx->out->ctx, heart);
 				heartset = 1;
 			}
-			run = _mux_run(ctx, ctx->estreams[i].pt, in);
+			run = _mux_run(ctx, &ctx->estreams[i]);
 		}
 		if (run == 0)
 		{
@@ -237,7 +246,8 @@ static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t * encoder)
 		else if (mime == mime_audiopcm)
 		{
 			pt = 11;
-			jitter->format = PCM_16bits_LE_mono;
+			ctx->estreams[i].extlen = sizeof(rtpext_pcm_t);
+			ctx->estreams[i].ext = calloc(1, ctx->estreams[i].extlen);
 		}
 		else if (mime == mime_audioflac)
 		{
@@ -269,7 +279,11 @@ static void mux_destroy(mux_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++)
+	{
+		if (ctx->estreams[i].ext)
+			free(ctx->estreams[i].ext);
 		jitter_destroy(ctx->estreams[i].in);
+	}
 	free(ctx);
 }
 

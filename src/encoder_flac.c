@@ -94,7 +94,7 @@ struct encoder_ctx_s
 
 static const char *jitter_name = "flac encoder";
 
-static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, size_t bytes)
+static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, size_t bytes, unsigned samples)
 {
 	if (bytes == 0)
 		return 0;
@@ -116,7 +116,8 @@ static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, si
 		if (length == bytes)
 		{
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			ctx->beat.length = ctx->samplesframe;
+			ctx->beat.length = samples;
+			//dbg("samplesframe %lu %lu", samples, ctx->samplesframe);
 			beat = &ctx->beat;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 		}
@@ -151,7 +152,7 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 //	if (samples == 0)
 //		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 	size_t length;
-	while ( (length = encoder_output(ctx, buffer, bytes)) > 0 )
+	while ( (length = encoder_output(ctx, buffer, bytes, samples)) > 0 )
 	{
 		if ((length == ((size_t) -1)))
 			return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
@@ -171,7 +172,7 @@ static int encoder_flac_init(encoder_ctx_t *ctx, jitter_format_t format)
 	/**
 	 * the samples frame must be up to 4608 bytes to be streamable
 	 */
-	ctx->samplesframe = 1024;
+	ctx->samplesframe = 4096;
 	ret = FLAC__stream_encoder_set_streamable_subset(ctx->encoder, true);
 	if (ret)
 		err("encoder: error with flac stream already set");

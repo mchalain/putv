@@ -212,7 +212,36 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	warn("\tnb csrc:\t%d", header->b.cc);
 	warn("\tpadding:\t%d", header->b.p);
 #endif
-	demux_out_t *out = ctx->out;
+	unsigned char *ext = NULL;
+	uint16_t *extid = 0;
+
+	input += sizeof(*header);
+	len -= sizeof(*header);
+	if (header->b.cc)
+	{
+		warn("CSCR:");
+		input += header->b.cc * sizeof(uint32_t);
+		len -= header->b.cc * sizeof(uint32_t);
+	}
+	if (header->b.x)
+	{
+		warn("rtp extension:");
+		extid = (uint16_t *)input;
+		input += sizeof(uint16_t);
+		len -= sizeof(uint16_t);
+		uint16_t *extlength = (uint16_t *)input;
+		input += sizeof(uint16_t);
+		len -= sizeof(uint16_t);
+
+		ext = input;
+		input += *extlength;
+		len -= *extlength;
+	}
+	/// player currently support only one session
+	if (ctx->sessionid != 0 && ctx->sessionid != header->ssrc)
+		return -1;
+	demux_out_t *out;
+	out = ctx->out;
 	while (out != NULL && out->ssrc != header->ssrc)
 		out = out->next;
 	if (out == NULL)
@@ -232,7 +261,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->out = out;
 		warn("demux: new rtp substream %d %s(%d)", header->ssrc, out->mime, header->b.pt);
 		event_listener_t *listener = ctx->listener;
-		const src_t src = { .ops = demux_rtp, .ctx = ctx };
+		const src_t src = { .ops = demux_rtp, .ctx = ctx, .info = ext };
 		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};
 		event_decode_es_t event_decode = {.src = &src};
 		while (listener != NULL)
@@ -243,27 +272,6 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 			listener = listener->next;
 		}
-	}
-	input += sizeof(*header);
-	len -= sizeof(*header);
-	if (header->b.cc)
-	{
-		warn("CSCR:");
-		input += header->b.cc * sizeof(uint32_t);
-		len -= header->b.cc * sizeof(uint32_t);
-	}
-	if (header->b.x)
-	{
-		warn("rtp extension:");
-		uint16_t *extid = (uint16_t *)input;
-		input += sizeof(uint16_t);
-		len -= sizeof(uint16_t);
-		uint16_t *extlength = (uint16_t *)input;
-		input += sizeof(uint16_t);
-		len -= sizeof(uint16_t);
-
-		input += *extlength;
-		len -= *extlength;
 	}
 #ifdef DEMUX_RTP_REORDER
 	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % NB_BUFFERS];

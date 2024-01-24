@@ -64,6 +64,7 @@ struct demux_out_s
 	char *data;
 	const char *mime;
 	short cc;
+	uint8_t pt;
 	demux_out_t *next;
 };
 
@@ -87,6 +88,7 @@ struct demux_ctx_s
 	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
+	uint32_t sessionid;
 	pthread_t thread;
 	event_listener_t *listener;
 	demux_profile_t *profiles;
@@ -215,6 +217,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out = out->next;
 	if (out == NULL)
 	{
+		ctx->sessionid = header->ssrc;
 		const char * mime = mime_octetstream;
 		mime = demux_profile(ctx, header->b.pt);
 		warn("demux: new rtp substream %d %s(%d)", header->ssrc, mime, header->b.pt);
@@ -223,6 +226,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out = calloc(1, sizeof(*out));
 		out->mime = mime;
 		out->ssrc = header->ssrc;
+		out->pt = header->b.pt;
 		out->cc = header->b.cc;
 		out->next = ctx->out;
 		ctx->out = out;

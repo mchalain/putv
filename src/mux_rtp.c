@@ -248,6 +248,9 @@ static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t * encoder)
 			pt = 11;
 			ctx->estreams[i].extlen = sizeof(rtpext_pcm_t);
 			ctx->estreams[i].ext = calloc(1, ctx->estreams[i].extlen);
+			rtpext_pcm_t *ext = (rtpext_pcm_t *)ctx->estreams[i].ext;
+			ext->format = jitter->format;
+			ext->samplerate = jitter->ctx->frequence;
 		}
 		else if (mime == mime_audioflac)
 		{

@@ -26,4 +26,11 @@ struct demux_ctx_s;
 typedef struct demux_ctx_s demux_ctx_t;
 extern void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime);
 
+typedef struct rtpext_pcm_s rtpext_pcm_t;
+struct rtpext_pcm_s
+{
+	jitter_format_t format;
+	uint16_t samplerate;
+};
+
 #endif

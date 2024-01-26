@@ -183,21 +183,26 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	ctx->dumpfd = open("rtp_dump.rtp", O_RDWR | O_CREAT, 0644);
 	err("dump %d", ctx->dumpfd);
 #endif
-	return ctx;
-}
 
-static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
-{
 	if (ctx->in == NULL)
 	{
-		int nbbuffers = ctx->nbbuffers << jitte;
+		int nbbuffers = ctx->nbbuffers;
 		ctx->in = jitter_init(JITTER_TYPE_SG, jitter_name, nbbuffers, BUFFERSIZE);
 #ifdef USE_REALTIME
 		ctx->in->ops->lock(ctx->in->ctx);
 #endif
 		ctx->in->format = SINK_BITSSTREAM;
-		ctx->in->ctx->thredhold = nbbuffers * 3 / 4;
+		ctx->in->ctx->thredhold = nbbuffers * 1 / 4;
+	}
+	return ctx;
+}
+
+static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
+{
+	if (ctx->jitte < jitte)
+	{
 		ctx->jitte = jitte;
+		ctx->in->ctx->thredhold *= (jitte + 1);
 	}
 	return ctx->in;
 }

@@ -86,11 +86,18 @@ struct encoder_ctx_s
 #define DEFAULT_SAMPLERATE 44100
 #endif
 
+#define LATENCY 100 //ms
+/**
+ * the samples frame must be up to 4608 bytes to be streamable
+ */
 //#define SAMPLES_FRAME 400
-#define SAMPLES_FRAME 300
-#define NB_BUFFERS 6
-#define LATENCY 200 //ms
-#define MAX_SAMPLES (44100 * 60 * 2)
+//#define NB_BUFFERS 6
+//#define SAMPLES_FRAME 512 // too many missing packets
+//#define NB_BUFFERS 60
+#define SAMPLES_FRAME 4608 // missing packets with blank samples
+#define NB_BUFFERS 21 // threshold 1/3 of buffers
+#define MAX_SAMPLES (DEFAULT_SAMPLERATE * 60 * 2) // 2 minutes
+#define HEARTBEAT_RATIO 1 // big samples_frame may contains a lot of blank and are sent too late
 
 static const char *jitter_name = "flac encoder";
 
@@ -110,19 +117,7 @@ static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, si
 		memcpy(ctx->outbuffer, buffer, length);
 
 		encoder_dbg("encoder: flac %lu", length);
-		beat_bitrate_t *beat = NULL;
 		ctx->outbuffer = NULL;
-#ifdef ENCODER_HEARTBEAT
-		if (length == bytes)
-		{
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			ctx->beat.length = samples;
-			//dbg("samplesframe %lu %lu", samples, ctx->samplesframe);
-			beat = &ctx->beat;
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-		}
-#endif
-		ctx->out->ops->push(ctx->out->ctx, length, beat);
 
 	}
 	else
@@ -151,6 +146,9 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 #endif
 //	if (samples == 0)
 //		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+	size_t orig = bytes / HEARTBEAT_RATIO;
+	if (orig == 0)
+		orig = 1;
 	size_t length;
 	while ( (length = encoder_output(ctx, buffer, bytes, samples)) > 0 )
 	{
@@ -158,6 +156,18 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 			return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 		bytes -= length;
 		buffer += length;
+		beat_bitrate_t *beat = NULL;
+#ifdef ENCODER_HEARTBEAT
+		if ((bytes % orig) == 0)
+		{
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			//ctx->beat.length = samples / HEARTBEAT_RATIO; // it should be true but ...
+			ctx->beat.length = samples; // this is better ???
+			beat = &ctx->beat;
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+		}
+#endif
+		ctx->out->ops->push(ctx->out->ctx, length, beat);
 	}
 	return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 }
@@ -169,10 +179,7 @@ static int encoder_flac_init(encoder_ctx_t *ctx, jitter_format_t format)
 	/** reinitialize the encoder **/
 	//FLAC__stream_encoder_finish(ctx->encoder);
 
-	/**
-	 * the samples frame must be up to 4608 bytes to be streamable
-	 */
-	ctx->samplesframe = 4096;
+	ctx->samplesframe = SAMPLES_FRAME;
 	ret = FLAC__stream_encoder_set_streamable_subset(ctx->encoder, true);
 	if (ret)
 		err("encoder: error with flac stream already set");
@@ -240,7 +247,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->in = jitter;
 	jitter->format = format;
 	jitter->ctx->frequence = 0; // automatic freq
-	jitter->ctx->thredhold = 1;
+	jitter->ctx->thredhold = NB_BUFFERS / 3;
 
 	return ctx;
 }

@@ -126,6 +126,17 @@ struct demux_ctx_s
 
 static const char *jitter_name = "rtp demux";
 
+static void _demux_player_cb(void *arg, event_t event, void *data)
+{
+	if (event == PLAYER_EVENT_CHANGE)
+	{
+		demux_ctx_t *ctx = (demux_ctx_t *)arg;
+		event_player_state_t *edata = (event_player_state_t *)data;
+		if (edata->state == STATE_STOP)
+			ctx->sessionid = 0;
+	}
+}
+
 static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -167,6 +178,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	warn("demux: add profile %s on %d", mime, pt);
 	demux_rtp_addprofile(ctx, pt, mime);
 
+	player_eventlistener(player, _demux_player_cb, ctx, jitter_name);
 #ifdef DEMUX_DUMP
 	ctx->dumpfd = open("rtp_dump.rtp", O_RDWR | O_CREAT, 0644);
 	err("dump %d", ctx->dumpfd);

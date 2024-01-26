@@ -138,6 +138,8 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 		return NULL;
 	}
 	src_ctx = src_list[src_id]->init(player, url, mime);
+	if (src_ctx == NULL)
+		return NULL;
 	src_ops = src_list[src_id];
 	src_t *src = calloc(1, sizeof(*src));
 	src->ops = src_ops;
@@ -170,7 +172,7 @@ const char *_src_mime(const char *protocol, const src_ops_t *const *ops)
 	int src_id = _src_find(ops, protocol);
 	if (src_id < 0)
 		return NULL;
-	return ops[src_id]->medium;
+	return ops[src_id]->medium();
 }
 
 const char *src_mime(const char *protocol)

@@ -226,8 +226,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	warn("\tnb csrc:\t%d", header->b.cc);
 	warn("\tpadding:\t%d", header->b.p);
 #endif
-	unsigned char *ext = NULL;
-	uint16_t *extid = 0;
+	rtpext_t *extheader = NULL;
 
 	input += sizeof(*header);
 	len -= sizeof(*header);
@@ -239,17 +238,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	}
 	if (header->b.x)
 	{
-		warn("rtp extension:");
-		extid = (uint16_t *)input;
-		input += sizeof(uint16_t);
-		len -= sizeof(uint16_t);
-		uint16_t *extlength = (uint16_t *)input;
-		input += sizeof(uint16_t);
-		len -= sizeof(uint16_t);
+		extheader = (rtpext_t *)input;
+		input += sizeof(*extheader);
+		len -= sizeof(*extheader);
+		warn("rtp extension: %x %u", extheader->extid, extheader->extlength);
 
-		ext = input;
-		input += *extlength;
-		len -= *extlength;
+		input += extheader->extlength;
+		len -= extheader->extlength;
 	}
 	/// player currently support only one session
 	if (ctx->sessionid != 0 && ctx->sessionid != header->ssrc)
@@ -259,7 +254,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	}
 	demux_out_t *out;
 	out = ctx->out;
-	while (out != NULL && out->ssrc != header->ssrc)
+	while (out != NULL && out->ssrc != header->ssrc && out->pt != header->b.pt)
 		out = out->next;
 	if (out == NULL)
 	{
@@ -278,6 +273,9 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->out = out;
 		warn("demux: new rtp substream %d %s(%d)", header->ssrc, out->mime, header->b.pt);
 		event_listener_t *listener = ctx->listener;
+		const char *ext = NULL;
+		if (extheader)
+			ext = (char *)(extheader + sizeof (*extheader));
 		const src_t src = { .ops = demux_rtp, .ctx = ctx, .info = ext };
 		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};
 		event_decode_es_t event_decode = {.src = &src};
@@ -357,6 +355,8 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		}
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
+		if (out->data == NULL)
+			return -1;
 #ifdef DEMUX_DUMP
 		if (ctx->dumpfd > 0)
 		{

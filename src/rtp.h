@@ -26,6 +26,13 @@ struct demux_ctx_s;
 typedef struct demux_ctx_s demux_ctx_t;
 extern void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime);
 
+typedef struct rtpext_s rtpext_t;
+struct rtpext_s
+{
+	uint16_t extid;
+	uint16_t extlength;
+};
+
 typedef struct rtpext_pcm_s rtpext_pcm_t;
 struct rtpext_pcm_s
 {

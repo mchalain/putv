@@ -55,6 +55,7 @@ struct mux_ctx_s
 	mux_estream_t estreams[MAX_ESTREAM];
 	jitter_t *out;
 	rtpheader_t header;
+	rtpext_putvctrl_t *putvctrl;
 	pthread_t thread;
 };
 #define MUX_CTX

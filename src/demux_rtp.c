@@ -271,6 +271,18 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		warn("demux: bad rtp session");
 		return -1;
 	}
+	if (header->b.pt == PUTVCTRL_PT && extheader)
+	{
+		rtpext_putvctrl_t *putvctrl = (rtpext_putvctrl_t *)(((char *)extheader) + sizeof (*extheader));
+		if (putvctrl->version != PUTVCTRL_VERSION)
+			err("demux: bad ctrl version");
+		rtpext_putvctrl_cmd_t *cmd = &putvctrl->cmd;
+		if (cmd->id == PUTVCTRL_ID_STATE && cmd->data == STATE_STOP)
+			ctx->sessionid = 0;
+		if (cmd->id == PUTVCTRL_ID_VOLUME)
+			player_volume(ctx->player, cmd->data % 100);
+		return 0;
+	}
 	demux_out_t *out;
 	out = ctx->out;
 	while (out != NULL && out->ssrc != header->ssrc && out->pt != header->b.pt)

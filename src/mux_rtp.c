@@ -76,6 +76,24 @@ struct mux_ctx_s
 #define LATENCE_MS 5
 
 static const char *jitter_name = "rtp muxer";
+static void _mux_player_cb(void *arg, event_t event, void *data)
+{
+	if (event == PLAYER_EVENT_CHANGE)
+	{
+		mux_ctx_t *ctx = (mux_ctx_t *)arg;
+		event_player_state_t *edata = (event_player_state_t *)data;
+		if (edata->state == STATE_STOP)
+		{
+			ctx->putvctrl = calloc(1, sizeof(*ctx->putvctrl));
+			ctx->putvctrl->version = PUTVCTRL_VERSION;
+			ctx->putvctrl->ncmds = 1;
+			ctx->putvctrl->cmd.id = PUTVCTRL_ID_STATE;
+			ctx->putvctrl->cmd.len = 2;
+			ctx->putvctrl->cmd.data = edata->state;
+		}
+	}
+}
+
 static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 {
 	mux_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -105,6 +123,7 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 		}
 		search = ptstr;
 	}
+	player_eventlistener(player, _mux_player_cb, ctx, jitter_name);
 
 	ctx->header.b.v = 2;
 	ctx->header.b.p = 0;
@@ -169,6 +188,27 @@ static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 
 		ctx->out->ops->push(ctx->out->ctx, len, beat);
 		in->ops->pop(in->ctx, inlength);
+	}
+	if (ctx->putvctrl)
+	{
+		size_t len = sizeof(ctx->header);
+		char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+
+		// copy header
+		memcpy(outbuffer, &ctx->header, len);
+		rtpheader_t *header = (rtpheader_t *)outbuffer;
+		header->b.pt = PUTVCTRL_PT;
+		header->b.x = 1;
+		rtpext_t extheader = {PUTVCTRL_PT, sizeof(*ctx->putvctrl)};
+		memcpy(outbuffer + len, &extheader, sizeof(extheader));
+		len += sizeof(extheader);
+		memcpy(outbuffer + len, ctx->putvctrl, sizeof(*ctx->putvctrl));
+		len += sizeof(*ctx->putvctrl);
+		//len = ctx->out->ops->length(ctx->out->ctx);
+		ctx->out->ops->push(ctx->out->ctx, len, NULL);
+
+		free(ctx->putvctrl);
+		ctx->putvctrl = NULL;
 	}
 	return 1;
 }

@@ -40,4 +40,24 @@ struct rtpext_pcm_s
 	uint16_t samplerate;
 };
 
+#define PUTVCTRL_PT 0x76
+#define PUTVCTRL_VERSION 0x01
+#define PUTVCTRL_ID_STATE	0x01
+#define PUTVCTRL_ID_VOLUME	0x02
+typedef struct rtpext_putvctrl_cmd_s rtpext_putvctrl_cmd_t;
+struct rtpext_putvctrl_cmd_s
+{
+	uint8_t id;
+	uint8_t len;
+	uint16_t data;
+};
+typedef struct rtpext_putvctrl_s rtpext_putvctrl_t;
+struct rtpext_putvctrl_s
+{
+	uint8_t version;
+	uint8_t ncmds;
+	uint16_t reserved;
+	rtpext_putvctrl_cmd_t cmd;
+};
+
 #endif

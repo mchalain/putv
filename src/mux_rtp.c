@@ -57,6 +57,7 @@ struct mux_ctx_s
 	rtpheader_t header;
 	rtpext_putvctrl_t *putvctrl;
 	pthread_t thread;
+	uint16_t volume;
 };
 #define MUX_CTX
 #include "mux.h"
@@ -91,6 +92,24 @@ static void _mux_player_cb(void *arg, event_t event, void *data)
 			ctx->putvctrl->cmd.len = 2;
 			ctx->putvctrl->cmd.data = edata->state;
 		}
+	}
+	if (event == PLAYER_EVENT_VOLUME)
+	{
+		mux_ctx_t *ctx = (mux_ctx_t *)arg;
+		event_player_volume_t *edata = (event_player_volume_t *)data;
+		dbg("volume changed %d", edata->volume);
+		if (edata->volume != -1)
+		{
+			ctx->putvctrl = calloc(1, sizeof(*ctx->putvctrl));
+			ctx->putvctrl->version = PUTVCTRL_VERSION;
+			ctx->putvctrl->ncmds = 1;
+			ctx->putvctrl->cmd.id = PUTVCTRL_ID_VOLUME;
+			ctx->putvctrl->cmd.len = 2;
+			ctx->putvctrl->cmd.data = edata->volume;
+			ctx->volume = edata->volume;
+		}
+		else
+			edata->volume = ctx->volume;
 	}
 }
 
@@ -134,6 +153,13 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 	ctx->header.timestamp = random();
 	ctx->header.ssrc = random();
 
+	ctx->volume = 20;
+	ctx->putvctrl = calloc(1, sizeof(*ctx->putvctrl));
+	ctx->putvctrl->version = PUTVCTRL_VERSION;
+	ctx->putvctrl->ncmds = 1;
+	ctx->putvctrl->cmd.id = PUTVCTRL_ID_VOLUME;
+	ctx->putvctrl->cmd.len = 2;
+	ctx->putvctrl->cmd.data = ctx->volume;
 	return ctx;
 }
 

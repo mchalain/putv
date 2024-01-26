@@ -74,7 +74,7 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
-#define BUFFERSIZE 15000
+#define BUFFERSIZE 16500
 
 #define NBUFFER 4
 

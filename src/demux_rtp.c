@@ -83,6 +83,7 @@ typedef struct demux_ctx_s src_ctx_t;
 struct demux_ctx_s
 {
 	demux_out_t *out;
+	player_ctx_t *player;
 	jitter_t *in;
 	jitte_t jitte;
 	unsigned short nbbuffers;
@@ -128,6 +129,7 @@ static const char *jitter_name = "rtp demux";
 static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->player = player;
 	ctx->mime = utils_mime2mime(mime);
 	demux_profile_t *profile = NULL;
 	ctx->nbbuffers = NB_BUFFERS;

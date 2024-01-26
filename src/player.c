@@ -205,7 +205,7 @@ void player_removeevent(player_ctx_t *ctx, int id)
 	}
 }
 
-int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name)
+int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, const char *name)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	if (ctx->listeners != NULL)
@@ -405,6 +405,11 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 			dbg("player: stoping");
 			for (i = 0; i < ctx->noutstreams; i++)
 				ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
+			event_player_state_t event = {
+				.playerctx = ctx,
+				.state = ctx->state,
+			};
+			_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 			if (ctx->src != NULL)
 			{
 				src_destroy(ctx->src);
@@ -429,6 +434,11 @@ static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 		case STATE_PLAY:
 		{
 			dbg("player: playing");
+			event_player_state_t event = {
+				.playerctx = ctx,
+				.state = ctx->state,
+			};
+			_player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 			if (pause)
 				break;
 			int id = 0;

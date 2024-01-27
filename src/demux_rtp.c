@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -96,6 +97,9 @@ struct demux_ctx_s
 	demux_reorder_t *reorder;
 #endif
 	const char *mime;
+	char *url;
+	const char *host;
+	const char *port;
 	uint32_t sessionid;
 	pthread_t thread;
 	event_listener_t *listener;
@@ -152,7 +156,8 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 #endif
 	char pt = 20;
 	uint32_t ssrc = 0;
-	const char *search = strchr(url, '?');
+	const char *search = NULL;
+	ctx->url = utils_parseurl(url, NULL, &ctx->host, &ctx->port, NULL, &search);
 	if (search != NULL)
 	{
 		const char *string = NULL;
@@ -294,7 +299,18 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->sessionlist = it;
 		it->ssrc = ssrc;
 		it->pt = header->b.pt;
-		warn("demux: bad rtp session %#04x", ssrc);
+		media_t *media = player_media(ctx->player);
+		if (media && media->ops->insert)
+		{
+			char *url;
+			if (asprintf(&url, "rtp://%s:%s?ssrc=%#x&pt=%hhd", ctx->host, ctx->port, ssrc, header->b.pt))
+			{
+				const char * mime = mime_octetstream;
+				mime = demux_profile(ctx, header->b.pt);
+				media->ops->insert(media->ctx, url, NULL, mime);
+				free(url);
+			}
+		}
 		return -1;
 	}
 	if (header->b.pt == PUTVCTRL_PT && extheader)

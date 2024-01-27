@@ -51,7 +51,7 @@ struct encoder_ctx_s
 	unsigned int samplerate;
 	unsigned char nchannels;
 	unsigned char samplesize;
-	int samplesframe;
+	unsigned int samplesframe;
 	int dumpfd;
 	pthread_t thread;
 	player_ctx_t *player;
@@ -75,8 +75,12 @@ struct encoder_ctx_s
 
 #define encoder_dbg(...)
 
+//#define DEFAULT_SAMPLERATE 48000
 #ifdef HEARTBEAT
 #define ENCODER_HEARTBEAT
+#else
+/// VBR currently doesn't support HeartBeat
+#define ENCODER_VBR
 #endif
 
 #define NB_BUFFERS 6
@@ -99,19 +103,22 @@ struct encoder_ctx_s
 // Lame supports only u16 samples
 #define INPUT_FORMAT PCM_16bits_LE_stereo
 
-#if defined(ENCODER_VBR) && ! defined(DEFAULT_BITRATE)
-# if DEFAULT_SAMPLERATE == 48000
-#  define DEFAULT_BITRATE 7
-# else
-#  define DEFAULT_BITRATE 4
-# endif
-#endif
-
 #ifndef DEFAULT_BITRATE
 # if DEFAULT_SAMPLERATE == 48000
-#  define DEFAULT_BITRATE 112
+/// output stream is more fluent if input and output framerate are the same
+#  define OUTPUT_AVERAGE 1000
+#  if defined(ENCODER_VBR)
+#   define DEFAULT_BITRATE 5
+#  else
+#   define DEFAULT_BITRATE 224
+#  endif
 # else
-#  define DEFAULT_BITRATE 128
+#  define OUTPUT_AVERAGE 1484
+#  if defined(ENCODER_VBR)
+#   define DEFAULT_BITRATE 0
+#  else
+#   define DEFAULT_BITRATE 224
+#  endif
 # endif
 #endif
 
@@ -156,7 +163,22 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 #endif
 
 	lame_set_disable_reservoir(ctx->encoder, 1);
-	lame_init_params(ctx->encoder);
+	
+	if (lame_init_params(ctx->encoder) <  0)
+	{
+		err("encoder: initialization error");
+		return -1;
+	}
+	warn("encoder MP3 config :");
+	warn("\tsample rate %d", ctx->samplerate);
+	warn("\tsample size %d", ctx->samplesize);
+	warn("\tnchannels %u", LAME_NCHANNELS);
+#ifdef ENCODER_VBR
+	warn("\tvariatic bitrate %d\n", DEFAULT_BITRATE);
+#else
+	warn("\tbitrate bitrate %d\n", DEFAULT_BITRATE);
+#endif
+		
 	return 0;
 }
 
@@ -177,46 +199,22 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	 * set samples frame to 3 framesize to have less than 1500 bytes
 	 * but more than 1000 bytes into the output
 	 */
-	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
-	//ctx->samplesframe = 576;
+	ctx->samplesframe = lame_get_maximum_number_of_samples(ctx->encoder, OUTPUT_AVERAGE);
 	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
-	warn(
-#ifdef ENCODER_VBR
-		"encoder MP3 config :\n" \
-		"\tbuffer size %lu\n" \
-		"\tsample rate %d\n" \
-		"\tsample size %d\n" \
-		"\variatic bitrate %d\n" \
-		"\tnchannels %u",
-#else
-		"encoder MP3 config :\n" \
-		"\tbuffer size %lu\n" \
-		"\tsample rate %d\n" \
-		"\tsample size %d\n" \
-		"\tbitrate %d\n" \
-		"\tnchannels %u",
-#endif
-		buffsize,
-		ctx->samplerate,
-		ctx->samplesize,
-		DEFAULT_BITRATE,
-		LAME_NCHANNELS);
-
+	warn("\tsamples frame %u", ctx->samplesframe);
+	warn("\tbuffer size %lu", buffsize);
 	encoder_dbg("encoder: mp3 ready");
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS, buffsize);
+	ctx->in = jitter;
+	jitter->format = INPUT_FORMAT;
+	jitter->ctx->frequence = 0; // automatic freq
+	jitter->ctx->thredhold = 1;
+
 	return ctx;
 }
 
 static jitter_t *encoder_jitter(encoder_ctx_t *ctx)
 {
-	if (ctx->in == NULL)
-	{
-		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS,
-					ctx->samplesframe * ctx->samplesize * ctx->nchannels);
-		ctx->in = jitter;
-		jitter->format = INPUT_FORMAT;
-		jitter->ctx->frequence = 0; // automatic freq
-		jitter->ctx->thredhold = 1;
-	}
 	return ctx->in;
 }
 
@@ -259,7 +257,7 @@ static void *lame_thread(void *arg)
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			warn("set lame samplerate %u",ctx->in->ctx->frequence);
-			encoder_lame_init(ctx, ctx->in->ctx->frequence, ctx->samplesize, ctx->nchannels);
+			encoder_lame_init(ctx, ctx->in->ctx->frequence, ctx->samplesize * 8, ctx->nchannels);
 		}
 		if (ctx->outbuffer == NULL)
 		{
@@ -293,10 +291,13 @@ static void *lame_thread(void *arg)
 			encoder_dbg("encoder lame %d", ret);
 			beat_bitrate_t *beat = NULL;
 #ifdef ENCODER_HEARTBEAT
+# ifndef ENCODER_VBR
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			ctx->beat.length = ret;
 			beat = &ctx->beat;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+# else
+# endif
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, beat);
 			ctx->outbuffer = NULL;
@@ -329,7 +330,8 @@ static void *lame_thread(void *arg)
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-#ifdef ENCODER_HEARTBEAT
+#if defined(ENCODER_HEARTBEAT)
+#if  !defined(ENCODER_VBR)
 	heartbeat_bitrate_t config;
 	config.bitrate = lame_get_brate(ctx->encoder);
 	config.ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
@@ -337,6 +339,14 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->heartbeat.ctx = heartbeat_bitrate->init(&config);
 	dbg("set heart %s %dms %dkbps", jitter->ctx->name, config.ms, config.bitrate);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
+#else
+	heartbeat_samples_t config;
+	config.samplerate = DEFAULT_SAMPLERATE;
+	config.format = INPUT_FORMAT;
+	ctx->heartbeat.ops = heartbeat_samples;
+	ctx->heartbeat.ctx = ctx->heartbeat.ops->init(&config);
+	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
+#endif
 #endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
 	return 0;
@@ -349,7 +359,7 @@ static const char *encoder_mime(encoder_ctx_t *ctx)
 
 static int encoder_samplerate(encoder_ctx_t *ctx)
 {
-	return ctx->samplerate;
+	return DEFAULT_SAMPLERATE;
 }
 
 static jitter_format_t encoder_format(encoder_ctx_t *ctx)

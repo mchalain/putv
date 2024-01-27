@@ -149,6 +149,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	ctx->reorder = calloc(ctx->nbbuffers, sizeof(*ctx->reorder));
 #endif
 	char pt = 20;
+	uint32_t ssrc = 0;
 	const char *search = strchr(url, '?');
 	if (search != NULL)
 	{
@@ -165,6 +166,12 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 			string += 3;
 			sscanf(string, "%hhd", &pt);
 		}
+		string = strstr(search, "ssrc=");
+		if (string != NULL)
+		{
+			string += 5;
+			sscanf(string, "0x%04x", &ssrc);
+		}
 		string = strstr(search, "nbuf=");
 		if (string != NULL)
 		{
@@ -179,6 +186,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	warn("demux: add profile %s on %d", mime, pt);
 	demux_rtp_addprofile(ctx, pt, mime);
 
+	ctx->sessionid = ssrc;
 	player_eventlistener(player, _demux_player_cb, ctx, jitter_name);
 #ifdef DEMUX_DUMP
 	ctx->dumpfd = open("rtp_dump.rtp", O_RDWR | O_CREAT, 0644);
@@ -272,7 +280,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	/// player currently support only one session
 	if (ctx->sessionid != 0 && ctx->sessionid != ssrc)
 	{
-		warn("demux: bad rtp session");
+		warn("demux: bad rtp session %#04x", ssrc);
 		return -1;
 	}
 	if (header->b.pt == PUTVCTRL_PT && extheader)

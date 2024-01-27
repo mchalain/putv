@@ -118,6 +118,16 @@ static void _mux_player_cb(void *arg, event_t event, void *data)
 static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 {
 	mux_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	uint32_t ssrc = random();
+	if (search)
+	{
+		const char *string = strstr(search, "ssrc=");
+		if (string != NULL)
+		{
+			string += 5;
+			sscanf(string, "0x%04x", &ssrc);
+		}
+	}
 	int i;
 	while (search)
 	{
@@ -154,8 +164,9 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 	ctx->seqnum = random();
 	ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
 	ctx->header.timestamp = random();
-	ctx->header.ssrc = random();
+	ctx->header.ssrc = __bswap_32(ssrc);
 
+	warn("mux: rtp stream ssrc %#04x", ctx->header.ssrc);
 	ctx->volume = 20;
 	ctx->putvctrl = calloc(1, sizeof(*ctx->putvctrl));
 	ctx->putvctrl->version = PUTVCTRL_VERSION;

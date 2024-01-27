@@ -107,6 +107,12 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	int id = ctx->lastid;;
 	media_url_t *media = ctx->media;
 
+	while (media != NULL)
+	{
+		if (!strcmp(path, media->url))
+			return media->id;
+		media = media->next;
+	}
 	media = calloc(1, sizeof(*media));
 
 	if (mime)
@@ -139,6 +145,13 @@ static int media_append(media_ctx_t *ctx, const char *path, const char *info, co
 {
 	int id = ctx->lastid;;
 	media_url_t *media = ctx->media;
+	while (media != NULL)
+	{
+		if (!strcmp(path, media->url))
+			return media->id;
+		media = media->next;
+	}
+	media = ctx->media;
 
 	if (media == NULL)
 	{

@@ -120,7 +120,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		return NULL;
 	}
 
-	int iport = 4400;
+	/// rfc3551
+	int iport = 5004;
 	if (port != NULL)
 		iport = atoi(port);
 
@@ -158,7 +159,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	jitter_format_t format = SINK_BITSSTREAM;
 	sink_ctx_t *ctx = NULL;
 	int sock;
-	int mtu;
+	int mtu = 1500;
 
 	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	//TODO: try IPPROTO_UDPLITE
@@ -200,8 +201,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 				}
 			}
 		}
-		ret = ioctl(sock, SIOCGIFMTU, &ifr);
-		mtu = (ret == -1)?1500:ifr.ifr_mtu;
+		if (ioctl(sock, SIOCGIFMTU, &ifr) != -1)
+			mtu = ifr.ifr_mtu;
 
 		int value=1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));

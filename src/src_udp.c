@@ -226,7 +226,8 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 
 	void *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
-	int iport = 4400;
+	/// rfc3551
+	int iport = 5004;
 	if (port != NULL)
 		iport = atoi(port);
 

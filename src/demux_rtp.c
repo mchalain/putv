@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <byteswap.h>
 
 #include <pthread.h>
 
@@ -230,7 +231,9 @@ void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime)
 static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 {
 	rtpheader_t *header = (rtpheader_t *)input;
-	demux_dbg("demux: rtp seqnum %d", header->b.seqnum);
+	uint16_t seqnum = __bswap_16(header->b.seqnum);
+	//dbg("demux: rtp seqnum %#x %#x", header->b.seqnum, seqnum);
+	uint32_t ssrc = __bswap_32(header->ssrc);
 #ifdef DEBUG_0
 	int i;
 	fprintf(stderr, "header: ");
@@ -238,12 +241,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		fprintf(stderr, "%.2x ", input[i]);
 	fprintf(stderr, "\n");
 	warn("rtp header:");
-	warn("\ttimestamp:\t%d", header->timestamp);
-	warn("\tseq:\t%d", header->b.seqnum);
-	warn("\tssrc:\t%d", header->ssrc);
-	warn("\ttype:\t%d", header->b.pt);
-	warn("\tnb csrc:\t%d", header->b.cc);
-	warn("\tpadding:\t%d", header->b.p);
+	warn("\ttimestamp:\t%#x", header->timestamp);
+	warn("\tseq:\t%#x", seqnum);
+	warn("\tssrc:\t%#x", ssrc);
+	warn("\ttype:\t%#x", header->b.pt);
+	warn("\tversion:\t%#x", header->b.v);
+	warn("\tnb csrc:\t%#x", header->b.cc);
+	warn("\tpadding:\t%#x", header->b.p);
 #endif
 	rtpext_t *extheader = NULL;
 
@@ -266,7 +270,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		len -= extheader->extlength;
 	}
 	/// player currently support only one session
-	if (ctx->sessionid != 0 && ctx->sessionid != header->ssrc)
+	if (ctx->sessionid != 0 && ctx->sessionid != ssrc)
 	{
 		warn("demux: bad rtp session");
 		return -1;
@@ -285,11 +289,11 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	}
 	demux_out_t *out;
 	out = ctx->out;
-	while (out != NULL && out->ssrc != header->ssrc && out->pt != header->b.pt)
+	while (out != NULL && out->ssrc != ssrc && out->pt != header->b.pt)
 		out = out->next;
 	if (out == NULL)
 	{
-		ctx->sessionid = header->ssrc;
+		ctx->sessionid = ssrc;
 		const char * mime = mime_octetstream;
 		mime = demux_profile(ctx, header->b.pt);
 		warn("demux: new rtp substream %d %s(%d)", header->ssrc, mime, header->b.pt);
@@ -320,8 +324,8 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		}
 	}
 #ifdef DEMUX_RTP_REORDER
-	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % ctx->nbbuffers];
-	int id = header->b.seqnum % (ctx->nbbuffers * NB_LOOPS);
+	demux_reorder_t *reorder = &ctx->reorder[seqnum % ctx->nbbuffers];
+	int id = seqnum % (ctx->nbbuffers * NB_LOOPS);
 
 	if (out->jitter != NULL && reorder->ready && reorder->id != id)
 	{
@@ -354,10 +358,10 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	if (out->jitter != NULL)
 	{
 		if (ctx->seqnum == 0)
-			ctx->seqorig = ctx->seqnum = header->b.seqnum - 1;
+			ctx->seqorig = ctx->seqnum = seqnum - 1;
 		ctx->seqnum++;
 		unsigned long missing = 0;
-		while (ctx->seqnum < header->b.seqnum)
+		while (ctx->seqnum < seqnum)
 		{
 #if 0
 			/*

@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
+#include <byteswap.h>
 
 #include "player.h"
 #include "encoder.h"
@@ -57,6 +58,7 @@ struct mux_ctx_s
 	rtpheader_t header;
 	rtpext_putvctrl_t *putvctrl;
 	pthread_t thread;
+	uint16_t seqnum;
 	uint16_t volume;
 };
 #define MUX_CTX
@@ -149,7 +151,8 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 	ctx->header.b.x = 0;
 	ctx->header.b.cc = 0;
 	ctx->header.b.m = 1;
-	ctx->header.b.seqnum = random();
+	ctx->seqnum = random();
+	ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
 	ctx->header.timestamp = random();
 	ctx->header.ssrc = random();
 
@@ -189,12 +192,13 @@ static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 		// copy header
 		memcpy(outbuffer, &ctx->header, len);
 		ctx->header.b.m = 0;
-		ctx->header.b.seqnum++;
-		if (ctx->header.b.seqnum == UINT16_MAX)
+		ctx->seqnum++;
+		if (ctx->seqnum == UINT16_MAX)
 		{
-			ctx->header.b.seqnum = 0;
+			ctx->seqnum = 0;
 			ctx->header.b.m = 1;
 		}
+		ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
 		if (estream->extlen > 0 && estream->ext)
 		{
 			ctx->header.b.x = 1;

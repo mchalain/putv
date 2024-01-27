@@ -76,6 +76,7 @@ struct demux_profile_s
 {
 	const char *mime;
 	demux_profile_t *next;
+	uint32_t ssrc;
 	char pt;
 };
 
@@ -99,6 +100,7 @@ struct demux_ctx_s
 	pthread_t thread;
 	event_listener_t *listener;
 	demux_profile_t *profiles;
+	demux_profile_t *sessionlist;
 
 #ifdef DEMUX_DUMP
 	int dumpfd;
@@ -280,6 +282,18 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	/// player currently support only one session
 	if (ctx->sessionid != 0 && ctx->sessionid != ssrc)
 	{
+		demux_profile_t *it = ctx->sessionlist;
+		while(it != NULL)
+		{
+			if (it->ssrc == ssrc)
+				return -1;
+			it = it->next;
+		}
+		it = calloc(1, sizeof(*it));
+		it->next = ctx->sessionlist;
+		ctx->sessionlist = it;
+		it->ssrc = ssrc;
+		it->pt = header->b.pt;
 		warn("demux: bad rtp session %#04x", ssrc);
 		return -1;
 	}

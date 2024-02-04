@@ -42,6 +42,13 @@
 #include "heartbeat.h"
 #include "media.h"
 
+#ifdef HEARTBEAT
+#define ENCODER_HEARTBEAT
+#else
+/// VBR currently doesn't support HeartBeat
+#define ENCODER_VBR
+#endif
+
 typedef struct encoder_ops_s encoder_ops_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
@@ -60,7 +67,11 @@ struct encoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
+#if defined (ENCODER_HEARTBEAT) && defined (ENCODER_VBR)
+	beat_samples_t beat;
+#elif defined (ENCODER_HEARTBEAT)
 	beat_bitrate_t beat;
+#endif
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -76,13 +87,6 @@ struct encoder_ctx_s
 #define encoder_dbg(...)
 
 //#define DEFAULT_SAMPLERATE 48000
-#ifdef HEARTBEAT
-#define ENCODER_HEARTBEAT
-#else
-/// VBR currently doesn't support HeartBeat
-#define ENCODER_VBR
-#endif
-
 #define NB_BUFFERS 6
 #ifndef DEFAULT_NCHANNELS
 # define DEFAULT_NCHANNELS 2
@@ -289,15 +293,17 @@ static void *lame_thread(void *arg)
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-			beat_bitrate_t *beat = NULL;
-#ifdef ENCODER_HEARTBEAT
-# ifndef ENCODER_VBR
+			void *beat = NULL;
+#if defined (ENCODER_HEARTBEAT) && defined (ENCODER_VBR)
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			ctx->beat.nsamples = ret;
+			beat = &ctx->beat;
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+#elif defined (ENCODER_HEARTBEAT)
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			ctx->beat.length = ret;
 			beat = &ctx->beat;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-# else
-# endif
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, beat);
 			ctx->outbuffer = NULL;

@@ -92,10 +92,16 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
 	beat_samples_t *beat = (beat_samples_t *)arg;
 	if (ctx->samplerate == 0)
+	{
+		err("heartbeat: sample rate undefined");
 		return -1;
+	}
 
 	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
+	{
+		err("heartbeat: not started");
 		return -1;
+	}
 
 	if (beat->nsamples == 0)
 		return 0;
@@ -116,7 +122,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	ctx->clock.tv_sec += usec / 1000000;
 #else
 	ctx->clock.tv_nsec +=
-		(ctx->nsamples * HEARTBEAT_COEF_1000 / ctx->samplerate) * 1000000;
+		((ctx->nsamples * HEARTBEAT_COEF_1000) / ctx->samplerate) * 1000000;
 
 	ctx->clock.tv_sec += (ctx->nsamples / ctx->samplerate);
 #endif

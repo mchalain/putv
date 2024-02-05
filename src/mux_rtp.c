@@ -125,7 +125,8 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 		if (string != NULL)
 		{
 			string += 5;
-			sscanf(string, "0x%04x", &ssrc);
+			if (sscanf(string, "0x%08x", &ssrc) == 0)
+				sscanf(string, "%010x", &ssrc);
 		}
 	}
 	int i;

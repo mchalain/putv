@@ -177,7 +177,8 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 		if (string != NULL)
 		{
 			string += 5;
-			sscanf(string, "0x%04x", &ssrc);
+			if (sscanf(string, "0x%08x", &ssrc) == 0)
+				sscanf(string, "%010u", &ssrc);
 		}
 		string = strstr(search, "nbuf=");
 		if (string != NULL)
@@ -311,6 +312,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 				free(url);
 			}
 		}
+		warn("demux: new ssrc %#x", it->ssrc);
 		return -1;
 	}
 	if (header->b.pt == PUTVCTRL_PT && extheader)
@@ -319,6 +321,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		if (putvctrl->version != PUTVCTRL_VERSION)
 			err("demux: bad ctrl version");
 		rtpext_putvctrl_cmd_t *cmd = &putvctrl->cmd;
+		dbg("demu: rtp ctl %u %u", cmd->id, cmd->data);
 		if (cmd->id == PUTVCTRL_ID_STATE && cmd->data == STATE_STOP)
 			ctx->sessionid = 0;
 		if (cmd->id == PUTVCTRL_ID_VOLUME)

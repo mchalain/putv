@@ -57,6 +57,9 @@ struct heartbeat_ctx_s
 
 #define heartbeat_dbg(...)
 
+//#define TIMERTYPE TIMER_ABSTIME
+#define TIMERTYPE 0
+
 static clockid_t clockid = CLOCK_REALTIME;
 
 static heartbeat_ctx_t *heartbeat_init(void *arg)
@@ -117,9 +120,12 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	int divider = ctx->samplerate / 100;
 	usec /= divider;
 	usec *= 10;
-#if 1
+#if TIMERTYPE == TIMER_ABSTIME
 	ctx->clock.tv_nsec += (usec % 1000000) * 1000;
 	ctx->clock.tv_sec += usec / 1000000;
+#elif TIMERTYPE == 0
+	ctx->clock.tv_nsec = (usec % 1000000) * 1000;
+	ctx->clock.tv_sec = usec / 1000000;
 #else
 	ctx->clock.tv_nsec +=
 		((ctx->nsamples * HEARTBEAT_COEF_1000) / ctx->samplerate) * 1000000;
@@ -131,23 +137,27 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
-	int flags = TIMER_ABSTIME;
-	while (clock_nanosleep(clockid, flags, &ctx->clock, NULL) != 0)
+	int flags = TIMERTYPE;
+	struct timespec remain = {0};
+	while (clock_nanosleep(clockid, flags, &ctx->clock, &remain) != 0)
 	{
 		if (errno == EINTR)
 			continue;
 		else
 		{
 			if (errno == EFAULT)
-				heartbeat_dbg("heartbeat to late %lu.%09lu", ctx->clock.tv_sec, ctx->clock.tv_nsec);
+				err("heartbeat: too late %lu.%09lu", ctx->clock.tv_sec, ctx->clock.tv_nsec);
 			pthread_mutex_unlock(&ctx->mutex);
 			return -1;
 		}
 	}
+	if (remain.tv_nsec != 0)
+		warn("too early");
 #ifdef DEBUG
 	struct timespec now;
 	clock_gettime(clockid, &now);
 	heartbeat_dbg("heartbeat: boom %lu.%09lu %ld.%06ld", now.tv_sec, now.tv_nsec, usec / 1000000, usec % 1000000);
+	heartbeat_dbg("heartbeat: nsamples %u at %d Hz", beat->nsamples, ctx->samplerate);
 #endif
 	ctx->nsamples = 0;
 	beat->nsamples = 0;

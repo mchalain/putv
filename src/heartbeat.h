@@ -30,6 +30,14 @@ struct heartbeat_bitrate_s
 	unsigned int ms;
 };
 
+typedef union beat_s beat_t;
+union beat_s
+{
+	unsigned long isset;
+	struct beat_bitrate_s bitrate;
+	struct beat_samples_s samples;
+};
+
 #ifndef HEARTBEAT_CTX
 typedef void heartbeat_ctx_t;
 #endif

@@ -65,6 +65,7 @@ struct mux_ctx_s
 #include "mux.h"
 #include "media.h"
 #include "jitter.h"
+#include "heartbeat.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)

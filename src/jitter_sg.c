@@ -43,6 +43,7 @@
 #else
 #define dbg(...)
 #endif
+
 typedef struct scatter_s scatter_t;
 struct scatter_s
 {
@@ -56,7 +57,7 @@ struct scatter_s
 	unsigned char *data;
 	size_t len;
 	int channel;
-	void *beat;
+	beat_t beat;
 	scatter_t *next;
 };
 
@@ -271,7 +272,9 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		}
 		pthread_mutex_lock(&private->mutex);
 		private->in->len = len;
-		private->in->beat = beat;
+		memset(&private->in->beat, 0, sizeof(private->in->beat));
+		if (beat)
+			memcpy(&private->in->beat, beat, sizeof(private->in->beat));
 		private->in->state = SCATTER_READY;
 		private->level++;
 		private->in = private->in->next;
@@ -286,12 +289,12 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 			private->out->state = SCATTER_POP;
 			int tlen = 0;
 #ifdef HEARTBEAT
-			if (private->out->beat && jitter->heartbeat != NULL)
+			if (private->out->beat.isset && jitter->heartbeat != NULL)
 			{
 				heartbeat_t *heartbeat = jitter->heartbeat;
-				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+				heartbeat->ops->wait(heartbeat->ctx, &private->out->beat);
 				jitter_dbg(jitter, "boom");
-				private->out->beat = NULL;
+				memset(&private->out->beat, 0, sizeof(private->out->beat));
 			}
 #endif
 			do
@@ -328,7 +331,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 #if defined(HEARTBEAT)
 		if (jitter->heartbeat != NULL)
 		{
-			if (private->in->beat)
+			if (private->in->beat.isset)
 				sched_yield();
 		}
 #endif
@@ -424,12 +427,11 @@ static unsigned char *jitter_peer_channel(jitter_ctx_t *jitter, int channel, voi
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
 #ifdef HEARTBEAT
-	while (private->out->beat && jitter->heartbeat != NULL)
+	while (private->out->beat.isset && jitter->heartbeat != NULL)
 	{
 		if (beat != NULL)
 		{
-			*beat = private->out->beat;
-			private->out->beat = NULL;
+			*beat = &private->out->beat;
 			break;
 		}
 		/**
@@ -439,11 +441,11 @@ static unsigned char *jitter_peer_channel(jitter_ctx_t *jitter, int channel, voi
 		 */
 		int ret;
 		heartbeat_t *heartbeat = jitter->heartbeat;
-		ret = heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+		ret = heartbeat->ops->wait(heartbeat->ctx, &private->out->beat);
 		jitter_dbg(jitter, "boom");
 		if (ret == -1)
 			heartbeat->ops->start(heartbeat->ctx);
-		private->out->beat = NULL;
+		memset(&private->out->beat, 0, sizeof(private->out->beat));
 	}
 #endif
 	return private->out->data;

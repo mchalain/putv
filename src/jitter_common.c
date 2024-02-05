@@ -31,7 +31,13 @@
 
 #include "jitter.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
 
 extern jitter_t *jitter_scattergather_init(const char *name, unsigned count, size_t size);
 extern jitter_t *jitter_ringbuffer_init(const char *name, unsigned count, size_t size);

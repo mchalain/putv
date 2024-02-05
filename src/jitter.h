@@ -52,14 +52,20 @@ struct jitter_ops_s
 	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *);
 	void (*lock)(jitter_ctx_t *);
 	void (*reset)(jitter_ctx_t *);
+	/// get a memory pointer to fill
 	unsigned char *(*pull)(jitter_ctx_t *);
 	unsigned char *(*pull_channel)(jitter_ctx_t *,int);
+	/// push a filled memory with size
 	void (*push)(jitter_ctx_t *, size_t, void *);
+	/// get a memory pointer to read
 	unsigned char *(*peer)(jitter_ctx_t *, void **);
 	unsigned char *(*peer_channel)(jitter_ctx_t *, int, void **);
+	/// free an empty memory
 	void (*pop)(jitter_ctx_t *, size_t len);
 	void (*flush)(jitter_ctx_t *);
+	/// return the length of data ready to peer
 	size_t (*length)(jitter_ctx_t*);
+	/// return true if buffer is empty
 	int (*empty)(jitter_ctx_t *);
 	void (*pause)(jitter_ctx_t *, int);
 	unsigned int (*nbchannels)(jitter_ctx_t *);

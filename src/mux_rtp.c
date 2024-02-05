@@ -78,6 +78,7 @@ struct mux_ctx_s
 #define mux_dbg(...)
 
 #define LATENCE_MS 5
+#define MUXJITTER_SIZE 6
 
 static const char *jitter_name = "rtp muxer";
 static void _mux_player_cb(void *arg, event_t event, void *data)
@@ -317,11 +318,8 @@ static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t * encoder)
 	{
 	//	int size = ctx->out->ctx->size - sizeof(ctx->header) - sizeof(uint32_t);
 		int size = ctx->out->ctx->size - sizeof(ctx->header);
+		unsigned int jitterdepth = MUXJITTER_SIZE;
 		unsigned char pt;
-		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
-		jitter->ctx->frequence = encoder->ops->samplerate(encoder->ctx);
-		jitter->ctx->thredhold = 3;
-		jitter->format = encoder->ops->format(encoder->ctx);
 		if (mime == mime_audiomp3)
 		{
 			pt = 14;
@@ -332,21 +330,26 @@ static unsigned int mux_attach(mux_ctx_t *ctx, encoder_t * encoder)
 			ctx->estreams[i].extlen = sizeof(rtpext_pcm_t);
 			ctx->estreams[i].ext = calloc(1, ctx->estreams[i].extlen);
 			rtpext_pcm_t *ext = (rtpext_pcm_t *)ctx->estreams[i].ext;
-			ext->format = jitter->format;
-			ext->samplerate = jitter->ctx->frequence;
+			ext->format = encoder->ops->format(encoder->ctx);
+			ext->samplerate = encoder->ops->samplerate(encoder->ctx);
 		}
 		else if (mime == mime_audioflac)
 		{
+			jitterdepth *= 15;
 			pt = 46;
 		}
 		else
 		{
 			pt = 99;
 		}
-		ctx->estreams[i].in = jitter;
 		if (ctx->estreams[i].pt == 0)
 			ctx->estreams[i].pt = pt;
 		ctx->estreams[i].mime = mime;
+		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, jitterdepth, size);
+		jitter->ctx->frequence = encoder->ops->samplerate(encoder->ctx);
+		jitter->ctx->thredhold = jitterdepth / 2;
+		jitter->format = encoder->ops->format(encoder->ctx);
+		ctx->estreams[i].in = jitter;
 		warn("mux: rtp attach %s to pt %d", mime, ctx->estreams[i].pt);
 	}
 	return 0;

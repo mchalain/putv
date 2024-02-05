@@ -62,7 +62,6 @@ struct encoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
-	beat_bitrate_t beat;
 	size_t maxsize;
 };
 #define ENCODER_CTX
@@ -156,18 +155,16 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 			return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 		bytes -= length;
 		buffer += length;
-		beat_bitrate_t *beat = NULL;
+		beat_t beat = {0};
 #ifdef ENCODER_HEARTBEAT
 		if ((bytes % orig) == 0)
 		{
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			//ctx->beat.length = samples / HEARTBEAT_RATIO; // it should be true but ...
-			ctx->beat.length = samples; // this is better ???
-			beat = &ctx->beat;
+			beat.samples.nsamples = samples / HEARTBEAT_RATIO;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 		}
 #endif
-		ctx->out->ops->push(ctx->out->ctx, length, beat);
+		ctx->out->ops->push(ctx->out->ctx, length, &beat);
 	}
 	return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
 }

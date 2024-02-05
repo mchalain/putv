@@ -261,8 +261,6 @@ static void *mux_thread(void *arg)
 	int result = 0;
 	int run = 1;
 	mux_ctx_t *ctx = (mux_ctx_t *)arg;
-	heartbeat_t *heart = NULL;
-	int heartset = 0;
 	for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 	{
 		warn("mux: rtp stream %u %u %s",ctx->header.ssrc, ctx->estreams[i].pt, ctx->estreams[i].mime);
@@ -273,13 +271,14 @@ static void *mux_thread(void *arg)
 		run = 0;
 		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 		{
-			jitter_t *in = ctx->estreams[i].in;
-			if (heart == NULL)
-				heart = in->ops->heartbeat(in->ctx, NULL);
-			if (!heartset && heart != NULL)
+			/// transfer heartbeat from encoder to sink
+			if (ctx->out->ops->heartbeat(ctx->out->ctx, NULL) == NULL)
 			{
-				ctx->out->ops->heartbeat(ctx->out->ctx, heart);
-				heartset = 1;
+				heartbeat_t *heart = NULL;
+				jitter_t *in = ctx->estreams[i].in;
+				heart = in->ops->heartbeat(in->ctx, NULL);
+				if (heart != NULL)
+					ctx->out->ops->heartbeat(ctx->out->ctx, heart);
 			}
 			run = _mux_run(ctx, &ctx->estreams[i]);
 		}

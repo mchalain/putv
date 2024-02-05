@@ -42,13 +42,6 @@
 #include "heartbeat.h"
 #include "media.h"
 
-#ifdef HEARTBEAT
-#define ENCODER_HEARTBEAT
-#else
-/// VBR currently doesn't support HeartBeat
-#define ENCODER_VBR
-#endif
-
 typedef struct encoder_ops_s encoder_ops_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
@@ -67,11 +60,6 @@ struct encoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
-#if defined (ENCODER_HEARTBEAT) && defined (ENCODER_VBR)
-	beat_samples_t beat;
-#elif defined (ENCODER_HEARTBEAT)
-	beat_bitrate_t beat;
-#endif
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -85,6 +73,12 @@ struct encoder_ctx_s
 #endif
 
 #define encoder_dbg(...)
+
+#ifdef HEARTBEAT
+#define ENCODER_HEARTBEAT
+#endif
+
+#define ENCODER_VBR
 
 //#define DEFAULT_SAMPLERATE 48000
 #define NB_BUFFERS 6
@@ -180,7 +174,7 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 #ifdef ENCODER_VBR
 	warn("\tvariatic bitrate %d\n", DEFAULT_BITRATE);
 #else
-	warn("\tbitrate bitrate %d\n", DEFAULT_BITRATE);
+	warn("\bitrate %d\n", DEFAULT_BITRATE);
 #endif
 		
 	return 0;
@@ -249,6 +243,7 @@ static void *lame_thread(void *arg)
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
 	encoder_dbg("encoder: mp3 thread start");
+	uint32_t nsamples = 0;
 	while (run)
 	{
 		int ret = 0;
@@ -256,6 +251,7 @@ static void *lame_thread(void *arg)
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
 		inlength /= ctx->samplesize * ctx->nchannels;
+		nsamples += inlength;
 		if (inlength < ctx->samplesframe)
 			warn("encoder lame: frame too small %d %ld", inlength, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
@@ -271,7 +267,7 @@ static void *lame_thread(void *arg)
 		{
 #if ENCODER_DUMP == 2
 			if (ctx->dumpfd > 0)
-				write(ctx->dumpfd, ctx->inbuffer, inlength);
+				write(ctx->dumpfd, ctx->inbuffer, inlength * ctx->samplesize * ctx->nchannels);
 #endif
 			ret = lame_encode_buffer_interleaved(ctx->encoder,
 					(short int *)ctx->inbuffer, inlength,
@@ -280,7 +276,8 @@ static void *lame_thread(void *arg)
 			if (ctx->dumpfd > 0 && ret > 0)
 				write(ctx->dumpfd, ctx->outbuffer, ret);
 #endif
-			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
+			//ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
+			ctx->in->ops->pop(ctx->in->ctx, inlength * ctx->samplesize * ctx->nchannels);
 		}
 		else
 		{
@@ -293,19 +290,18 @@ static void *lame_thread(void *arg)
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-			void *beat = NULL;
-#if defined (ENCODER_HEARTBEAT) && defined (ENCODER_VBR)
+			beat_t beat = {0};
+#if defined (ENCODER_HEARTBEAT) && !defined (ENCODER_VBR)
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			ctx->beat.nsamples = ret;
-			beat = &ctx->beat;
+			beat.bitrate.length = ret;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 #elif defined (ENCODER_HEARTBEAT)
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			ctx->beat.length = ret;
-			beat = &ctx->beat;
+			beat.samples.nsamples = nsamples;
+			nsamples = 0;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 #endif
-			ctx->out->ops->push(ctx->out->ctx, ret, beat);
+			ctx->out->ops->push(ctx->out->ctx, ret, &beat);
 			ctx->outbuffer = NULL;
 		}
 		if (ret < 0)
@@ -336,8 +332,7 @@ static void *lame_thread(void *arg)
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-#if defined(ENCODER_HEARTBEAT)
-#if  !defined(ENCODER_VBR)
+#if defined (ENCODER_HEARTBEAT) && !defined (ENCODER_VBR)
 	heartbeat_bitrate_t config;
 	config.bitrate = lame_get_brate(ctx->encoder);
 	config.ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
@@ -345,14 +340,13 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->heartbeat.ctx = heartbeat_bitrate->init(&config);
 	dbg("set heart %s %dms %dkbps", jitter->ctx->name, config.ms, config.bitrate);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
-#else
+#elif defined (ENCODER_HEARTBEAT)
 	heartbeat_samples_t config;
 	config.samplerate = DEFAULT_SAMPLERATE;
 	config.format = INPUT_FORMAT;
 	ctx->heartbeat.ops = heartbeat_samples;
 	ctx->heartbeat.ctx = ctx->heartbeat.ops->init(&config);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
-#endif
 #endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
 	return 0;

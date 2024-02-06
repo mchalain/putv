@@ -33,4 +33,5 @@ struct sink_s
 
 sink_t *sink_build(player_ctx_t *, const char *arg);
 
+int parse_audioparameters(const char *setting, jitter_format_t *format, int *rate, char **mixer);
 #endif

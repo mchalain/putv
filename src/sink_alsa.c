@@ -364,45 +364,15 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	{
 		soundcard = url;
 	}
-	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
-	while (setting != NULL)
-	{
-		if (!strncmp(setting, "format=", 7))
-		{
-			setting += 7;
-			if (!strncmp(setting, "8", 1))
-				format = PCM_8bits_mono;
-			if (!strncmp(setting, "16le", 4))
-				format = PCM_16bits_LE_stereo;
-			if (!strncmp(setting, "24le", 4))
-				format = PCM_24bits4_LE_stereo;
-			if (!strncmp(setting, "32le", 4))
-				format = PCM_32bits_LE_stereo;
-		}
-		if (!strncmp(setting, "samplerate=", 11))
-		{
-			setting += 11;
-			samplerate = atoi(setting);
-		}
-		if (!strncmp(setting, "mixer=", 6))
-		{
-			setting += 6;
-			ctx->mixerch = setting;
-		}
-		setting = strchr(setting, ',');
-		if (setting)
-		{
-			*setting = '\0';
-			setting++;
-		}
-	}
+	parse_audioparameters(setting, &format, &samplerate, &ctx->mixerch);
 #endif
+	if (ctx->mixerch == NULL)
+		ctx->mixerch = strdup(ALSA_MIXER);
 
 	ctx->soundcard = soundcard;
 	ctx->buffersize = LATENCE_MS * samplerate / 1000;
 	ctx->samplerate = samplerate;
-
 	snd_lib_error_set_handler(_alsa_error);
 	if (_pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize) < 0)
 	{
@@ -528,6 +498,7 @@ static void *sink_thread(void *arg)
 		}
 		if (ret == -EPIPE)
 		{
+			warn("broken PIPE");
 			ret = snd_pcm_prepare(ctx->playback_handle);
 		}
 		if (ret < 0)
@@ -580,7 +551,9 @@ static void *sink_thread(void *arg)
 			write(ctx->dumpfd, buff, length);
 #endif
 			if (ret < 0)
+			{
 				err("sink alsa: pcm wait error %s", snd_strerror(ret));
+			}
 			else
 			{
 				sink_dbg("sink: alsa write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
@@ -682,6 +655,8 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	if (ctx->mixer)
 		snd_mixer_close(ctx->mixer);
 #endif
+	if (ctx->mixerch)
+		free(ctx->mixerch);
 
 #ifdef SINK_ALSA_NOISE
 	free(ctx->noise);

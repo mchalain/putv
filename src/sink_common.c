@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,3 +83,47 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	free(data);
 	return &_sink;
 }
+
+#ifdef SINK_ALSA_CONFIG
+int parse_audioparameters(const char *setting, jitter_format_t *format, int *rate, char **mixer)
+{
+	while (setting != NULL)
+	{
+		if (!strncmp(setting, "format=", 7))
+		{
+			setting += 7;
+			if (!strncmp(setting, "8", 1))
+				*format = PCM_8bits_mono;
+			if (!strncmp(setting, "16le", 4))
+				*format = PCM_16bits_LE_stereo;
+			if (!strncmp(setting, "24le", 4))
+				*format = PCM_24bits4_LE_stereo;
+			if (!strncmp(setting, "32le", 4))
+				*format = PCM_32bits_LE_stereo;
+		}
+		if (!strncmp(setting, "samplerate=", 11))
+		{
+			setting += 11;
+			*rate = atoi(setting);
+		}
+		if (!strncmp(setting, "mixer=", 6))
+		{
+			setting += 6;
+			if (mixer)
+			{
+				char *end = strchr(setting, '&');
+				if (end && asprintf(mixer, "%*s", (int)(end - setting), setting))
+					return -1;
+				else if ((*mixer = strdup(setting)) == NULL)
+					return -1;
+			}
+		}
+		setting = strchr(setting, '&');
+		if (setting)
+		{
+			setting++;
+		}
+	}
+	return 0;
+}
+#endif

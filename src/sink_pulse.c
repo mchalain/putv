@@ -36,6 +36,7 @@
 
 #include "player.h"
 #include "encoder.h"
+#include "media.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -97,22 +98,22 @@ int pa_format_from(jitter_format_t format)
 	switch (format)
 	{
 		case PCM_32bits_LE_stereo:
-			config->pa_format = PA_SAMPLE_S32LE;
+			return PA_SAMPLE_S32LE;
 		break;
 		case PCM_24bits4_LE_stereo:
-			config->pa_format = PA_SAMPLE_S24_32LE;
+			return PA_SAMPLE_S24_32LE;
 		break;
 		case PCM_24bits3_LE_stereo:
-			config->pa_format = PA_SAMPLE_S24LE;
+			return PA_SAMPLE_S24LE;
 		break;
 		case PCM_16bits_LE_stereo:
-			config->pa_format = PA_SAMPLE_S16LE;
+			return PA_SAMPLE_S16LE;
 		break;
 		case PCM_16bits_LE_mono:
-			config->pa_format = PA_SAMPLE_S16LE;
+			return PA_SAMPLE_S16LE;
 		break;
 		case PCM_8bits_mono:
-			config->pa_format = PA_SAMPLE_U8;
+			return PA_SAMPLE_U8;
 		break;
 	}
 	return PA_SAMPLE_S16LE;
@@ -164,6 +165,10 @@ static int _pa_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, 
 	ctx->samplesize = config.samplesize;
 	ctx->samplerate = rate;
 
+	warn("sink: pulseaudio");
+	warn("\tsample size: %u", config.samplesize);
+	warn("\tnb channels: %u", config.nchannels);
+	warn("\tsample rate: %u Hz", rate);
 	int error;
 	char *name = PACKAGE;
 	ctx->playback_handle = pa_simple_new(NULL, name, PA_STREAM_PLAYBACK, NULL, "Music", &spec, NULL, NULL, &error);
@@ -186,11 +191,18 @@ static int _pa_close(sink_ctx_t *ctx)
 }
 
 static const char *jitter_name = "pulse";
-static sink_ctx_t *sink_init(player_ctx_t *player, const char *arg)
+static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
+	const char *protocol;
+	const char *search;
+	void *value = utils_parseurl(url, &protocol, NULL, NULL, NULL, &search);
 	int samplerate = DEFAULT_SAMPLERATE;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
+#ifdef SINK_ALSA_CONFIG
+	parse_audioparameters(search, &format, &samplerate, NULL);
+#endif
+	free(value);
 
 	unsigned int size = LATENCE_MS * samplerate / 1000;
 	if (_pa_open(ctx, format, samplerate, &size) < 0)
@@ -221,7 +233,6 @@ static void *sink_thread(void *arg)
 {
 	int ret;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
-	int divider = ctx->samplesize * ctx->nchannels;
 
 	/* start decoding */
 	while (ctx->in->ops->empty(ctx->in->ctx))
@@ -242,8 +253,7 @@ static void *sink_thread(void *arg)
 			warn("sink: write error %s", pa_strerror(error));
 			ctx->state = STATE_ERROR;
 		}
-		dbg("sink: write");
-		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
+		ctx->in->ops->pop(ctx->in->ctx, length);
 	}
 	dbg("sink: thread end");
 	return NULL;

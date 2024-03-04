@@ -872,10 +872,25 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	return end - buffer + 1;
 }
 
+#define HISTORY_DEPTH 10
 int run_shell(ctx_t *ctx)
 {
+#ifdef SHELL_CANONIC
 	int ret = 0;
-	do
+	struct termios old_tio, new_tio;
+	tcgetattr(STDIN_FILENO,&old_tio);
+	new_tio = old_tio;
+	new_tio.c_lflag &= (~ICANON & ~ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
+#endif
+	char history[HISTORY_DEPTH][1024] = {0};
+	int last = 0;
+	int arrow = last;
+	char buffer[1024] = {0};
+	size_t length = 0;
+	fprintf (termout, "> ");
+	ctx->run = 1;
+	while (ctx->run)
 	{
 		fd_set rfds;
 		struct timeval timeout = {1, 0};
@@ -891,13 +906,59 @@ int run_shell(ctx_t *ctx)
 		FD_ZERO(&rfds);
 		FD_SET(ctx->inputfd, &rfds);
 		int maxfd = ctx->inputfd;
-		fprintf (termout, "> ");
 		fflush(termout);
-		ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
-		char buffer[1024];
+		int ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
+		int cmdready = 0;
 		if (ret > 0 && FD_ISSET(ctx->inputfd, &rfds))
 		{
-			int length;
+#ifdef SHELL_CANONIC
+			char c = getchar();
+			if (c > 0x19 && c < 0x7F)
+			{
+				if (length == sizeof(buffer))
+					continue;
+				fprintf(termout, "%c", c);
+				buffer[length++] = c;
+				continue;
+			}
+
+			switch (c)
+			{
+			case -1:
+				ctx->run = 0;
+				continue;
+			break;
+			case 0x08: //backspace
+				length--;
+				memmove(&buffer[length], &buffer[length + 1], sizeof(buffer) - length);
+				fprintf(termout, "\r%s  ", buffer);
+			break;
+			case 0x1B: // escape or up arrow
+				if (arrow == 0)
+					continue;
+				fprintf(termout, "\r%s  ", history[--arrow]);
+				memcpy(buffer, history[arrow], sizeof(buffer));
+				length = strlen(buffer);
+			break;
+			case 0x18: // cancel
+				fprintf(termout, "\n");
+				length = 0;
+				memset(buffer, 0, sizeof(buffer));
+			break;
+			case '\n':
+				memcpy(history[last++], buffer, sizeof(buffer));
+				if (last == HISTORY_DEPTH)
+				{
+					for (int i = 0; i < last - 1; i++)
+						memcpy(history[i], history[i + 1], sizeof(buffer));
+					last--;
+				}
+				arrow = last;
+				cmdready = 1;
+				// do nothing and go to parser
+			break;
+			}
+#else
 			ret = ioctl(ctx->inputfd, FIONREAD, &length);
 			if (length >= sizeof(buffer))
 			{
@@ -909,8 +970,9 @@ int run_shell(ctx_t *ctx)
 			{
 				dbg("cmdline: end of script");
 				ctx->run = 0;
+				continue;
 			}
-			if (length < 0)
+			else if (length < 0)
 			{
 				ctx->run = 1;
 				// disconnect to end run_client
@@ -919,6 +981,12 @@ int run_shell(ctx_t *ctx)
 				sleep(1);
 				continue;
 			}
+			else
+				cmdready = 1;
+#endif
+		}
+		if (cmdready)
+		{
 			char *offset = buffer;
 			while (length > 0)
 			{
@@ -933,14 +1001,19 @@ int run_shell(ctx_t *ctx)
 				else
 					ctx->run = 0;
 			}
+			fprintf (termout, "> ");
+			cmdready = 0;
 		}
-	} while (ctx->run);
+	}
+#ifdef SHELL_CANONIC
+	tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);
+#endif
 	if (ctx->client)
 	{
 		sleep(1); // wait that the last request is treated otherwise the connection closing too fast
 		client_disconnect(ctx->client);
 	}
-	return ret;
+	return 0;
 }
 
 int run_client(void *arg)

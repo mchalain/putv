@@ -77,10 +77,7 @@ struct src_ctx_s
 #include "demux.h"
 #include "media.h"
 #include "decoder.h"
-
-#ifdef TINYSVCMDNS
-#include "tinysvcmdns/mdns.h"
-#endif
+extern const char *rtp_service;// _rtp._udp
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -102,6 +99,7 @@ struct src_ctx_s
  * The feature is alway possible to remember that is not a good solution.
  */
 static const char *jitter_name = "udp socket";
+const char *rtp_service = "_rtp._udp.local";
 
 static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 {
@@ -518,25 +516,16 @@ static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 }
 
 #ifdef TINYSVCMDNS
-static void _src_mdns(src_ctx_t *ctx, const char *host, struct rr_entry *entry)
+static const char * _src_mdnssvc(void * arg, const char **target, int *port, const char *txt[])
 {
-	warn("!!!!!!!!!!!!!! coucou !!!!!!!!!!!!!!!!!!");
-	warn("entry %p", entry);
-	if (entry != NULL)
-	{
-		char *namestr = nlabel_to_str(entry->name);
-		warn("tinysvcmdns: name = %s type = %s", namestr, rr_get_type_name(entry->type));
-	}
-#if 0
-	const char *host = "224.0.0.1";
-	int iport = 4400;
-	int sock = src_connect(ctx, host, iport);
-	if (ctx->sock > 0)
-		src_start(ctx);
-#endif
+	src_ctx_t *ctx = (src_ctx_t *)arg;
+	*target = ctx->host;
+	*port = ctx->port;
+	*txt = NULL;
+	return rtp_service;
 }
 #else
-#define _src_mdns NULL
+#define _src_mdnssvc NULL
 #endif
 
 static void _src_destroy(src_ctx_t *ctx)
@@ -582,6 +571,6 @@ const src_ops_t *src_udp = &(const src_ops_t)
 	.eventlistener = _src_eventlistener,
 	.attach = _src_attach,
 	.estream = _src_estream,
-	.mdns = _src_mdns,
+	.service = _src_mdnssvc,
 	.destroy = _src_destroy,
 };

@@ -60,4 +60,5 @@ struct rtpext_putvctrl_s
 	rtpext_putvctrl_cmd_t cmd;
 };
 
+extern const char *rtp_service;// _rtp._udp
 #endif

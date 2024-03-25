@@ -79,6 +79,7 @@ struct sink_ctx_s
 #define SINK_CTX
 #include "sink.h"
 #include "media.h"
+#include "rtp.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -106,6 +107,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	const char *search = NULL;
 	in_addr_t if_addr = INADDR_ANY;
 
+	dbg("sink: url %s", url);
 	void *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
 	if (protocol == NULL)
@@ -124,6 +126,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	int iport = 5004;
 	if (port != NULL)
 		iport = atoi(port);
+	dbg("sink: search %s", search);
 
 	if (search != NULL)
 	{
@@ -458,11 +461,13 @@ static int sink_run(sink_ctx_t *ctx)
 	return 0;
 }
 
-static const char *sink_service(sink_ctx_t *ctx, int *port, const char **txt[])
+static const char *sink_service(void * arg, const char **target, int *port, const char **txt[])
 {
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	*target = inet_ntoa(ctx->saddr.sin_addr);
 	*port = htons(ctx->saddr.sin_port);
 	*txt = ctx->sink_txt;
-	return "_rtp._udp";
+	return rtp_service;
 }
 
 static void sink_destroy(sink_ctx_t *ctx)

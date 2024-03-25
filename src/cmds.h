@@ -26,4 +26,5 @@ extern cmds_ops_t *cmds_line;
 extern cmds_ops_t *cmds_json;
 extern cmds_ops_t *cmds_input;
 extern cmds_ops_t *cmds_tinysvcmdns;
+typedef const char* (*service_cb)(void *arg, const char **target, int *port, const char **txt[]);
 #endif

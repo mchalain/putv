@@ -52,6 +52,14 @@
 #include "mdnsd.h"
 
 #include "player.h"
+typedef struct tinysvc_s tinysvc_t;
+struct tinysvc_s
+{
+	char *type;
+	const char *target;
+	struct mdns_service *svc;
+	tinysvc_t *next;
+};
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -59,7 +67,7 @@ struct cmds_ctx_s
 	char *appname;
 	int run;
 	struct mdnsd *svr;
-	struct mdns_service *svc[2];
+	tinysvc_t *tinysvc;
 	pthread_t thread;
 	int onchangeid;
 };
@@ -144,25 +152,17 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 				err("tinysvcmdns: start error %s\n", strerror(errno));
 				return NULL;
 			}
-
-			in_addr_t main_ip = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
-
-			mdnsd_set_hostname(svr, hostname, main_ip); // TTL should be 120 seconds
 			break;
 		}
 #ifdef IPV6
 		else if (ifa_main->ifa_addr && ifa_main->ifa_addr->sa_family == AF_INET6)
 		{
 			if (svr == NULL)
-				svr = mdnsd_start();
+				svr = mdnsd_start(NULL);
 			if (svr == NULL) {
 				err("mdnsd_start() error\n");
 				return NULL;
 			}
-
-			struct in6_addr *addr = &((struct sockaddr_in6 *)ifa_main->ifa_addr)->sin6_addr;
-
-			mdnsd_set_hostname_v6(svr, hostname, addr); // TTL should be 120 seconds
 			break;
 		}
 #endif
@@ -172,34 +172,6 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 	{
 		err("tinysvcmdns: ipv4 or ipv6 interface different of loopback not found");
 		return NULL;
-	}
-
-	struct ifaddrs *ifa_other;
-	for (ifa_other = ifa_list; ifa_other != NULL; ifa_other = ifa_other->ifa_next)
-	{
-		if ((ifa_other->ifa_flags & IFF_LOOPBACK) || !(ifa_other->ifa_flags & IFF_MULTICAST))
-			continue;
-		if (ifa_other == ifa_main)
-			continue;
-		switch (ifa_other->ifa_addr->sa_family)
-		{
-			case AF_INET:
-			{
-				uint32_t ip = ((struct sockaddr_in *)ifa_other->ifa_addr)->sin_addr.s_addr;
-				struct rr_entry *a_e =
-				rr_create_a(create_nlabel(hostname), ip); // TTL should be 120 seconds
-				mdnsd_add_rr(svr, a_e);
-			}
-			break;
-			case AF_INET6:
-			{
-				struct in6_addr *addr = &((struct sockaddr_in6 *)ifa_other->ifa_addr)->sin6_addr;
-				struct rr_entry *aaaa_e =
-				rr_create_aaaa(create_nlabel(hostname), addr); // TTL should be 120 seconds
-				mdnsd_add_rr(svr, aaaa_e);
-			}
-			break;
-		}
 	}
 
 	freeifaddrs(ifa_list);
@@ -213,12 +185,26 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 
 	asprintf(&ctx->appname, "%s@%s", appname, hostname);
 
-	txt = (const char **)arg;
-	struct mdns_service *svc = mdnsd_register_svc(svr, ctx->appname,
-									"_http._tcp.local", 80, NULL, txt);
-	ctx->svc[0] = svc;
-
 	return ctx;
+}
+
+static int create_service(cmds_ctx_t *ctx, service_cb cb, void *arg)
+{
+	int port;
+	const char *service;
+	const char *target;
+	const char **txt;
+	service = cb(arg, &target, &port, &txt);
+
+	err("new service %s %s:%d", service, target, port);
+	struct mdns_service *svc = mdnsd_register_svc(ctx->svr, ctx->appname,
+							service, port, target, txt);
+	tinysvc_t *tinysvc = calloc(1, sizeof(*tinysvc));
+	tinysvc->type = service;
+	tinysvc->svc = svc;
+	tinysvc->next = ctx->tinysvc;
+	ctx->tinysvc = tinysvc;
+	return 0;
 }
 
 static void tinysvcmdns_onchange(void * userctx, event_t event, void *eventarg)
@@ -230,10 +216,13 @@ static void tinysvcmdns_onchange(void * userctx, event_t event, void *eventarg)
 		case PLAYER_EVENT_CHANGE:
 		{
 			event_player_state_t *data = (event_player_state_t *)eventarg;
-			src_t *src = player_source(data->playerctx);
-			if (src != NULL && src->ops->mdns != NULL)
+			if (data->state == STATE_CHANGE)
 			{
-				//mdnsd_register_cb(ctx->svr, "_http._tcp.local.", src->ops->mdns, src->ctx);
+				src_t *src = player_source(data->playerctx);
+				if (src != NULL && src->ops->service != NULL)
+				{
+					create_service(ctx, src->ops->service, src->ctx);
+				}
 			}
 		}
 		break;
@@ -242,16 +231,11 @@ static void tinysvcmdns_onchange(void * userctx, event_t event, void *eventarg)
 
 static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx, sink_t *sink)
 {
+	err("tinysvcmdns start");
 	if (sink->ops->service != NULL)
 	{
-		int port;
-		char *service;
-		const char **txt;
-		asprintf(&service, "%s.local", sink->ops->service(sink->ctx, &port, &txt));
-
-		struct mdns_service *svc = mdnsd_register_svc(ctx->svr, ctx->appname,
-									service, port, NULL, txt);
-		ctx->svc[1] = svc;
+	err("tinysvcmdns start %s", sink->ops->name);
+		create_service(ctx, sink->ops->service, sink->ctx);
 	}
 	ctx->onchangeid = player_eventlistener(ctx->player,
 			tinysvcmdns_onchange, (void *)ctx, "tinysvcmdns");
@@ -263,9 +247,11 @@ static void cmds_tinysvcmdns_destroy(cmds_ctx_t *ctx)
 {
 	ctx->run = 0;
 	pthread_join(ctx->thread, NULL);
-	mdns_service_destroy(ctx->svc[0]);
-	if (ctx->svc[1])
-		mdns_service_destroy(ctx->svc[1]);
+	for (tinysvc_t *svc = ctx->tinysvc; svc; svc = svc->next)
+	{
+		mdns_service_destroy(svc->svc);
+		free(svc);
+	}
 	mdnsd_stop(ctx->svr);
 	free(ctx->appname);
 	free(ctx);

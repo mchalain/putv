@@ -447,7 +447,7 @@ static void *_cmds_line_pthread(void *arg)
 	return (void*)(intptr_t)ret;
 }
 
-static int cmds_line_run(cmds_ctx_t *ctx)
+static int cmds_line_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	pthread_create(&ctx->thread, NULL, _cmds_line_pthread, (void *)ctx);
 

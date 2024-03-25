@@ -1703,7 +1703,7 @@ static void *_cmds_json_pthreadrecv(void *arg)
 	return NULL;
 }
 
-static int cmds_json_run(cmds_ctx_t *ctx)
+static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	/**

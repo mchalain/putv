@@ -13,7 +13,7 @@ typedef struct jitter_s jitter_t;
 typedef void src_ctx_t;
 #endif
 
-struct rr_entry;
+#include "cmds.h"
 
 typedef struct src_ops_s src_ops_t;
 struct src_ops_s

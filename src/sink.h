@@ -6,6 +6,8 @@ typedef struct jitter_s jitter_t;
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ops_s encoder_ops_t;
 
+#include "cmds.h"
+
 #ifndef SINK_CTX
 typedef void sink_ctx_t;
 #endif

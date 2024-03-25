@@ -149,6 +149,8 @@ static encoder_t *main_encoder(player_ctx_t *player, sink_t *sink)
 	// start encoder
 	encoder->ops->run(encoder->ctx, sink_jitter);
 
+	player_subscribe(player, encoder);
+
 	return encoder;
 }
 
@@ -401,14 +403,12 @@ int main(int argc, char **argv)
 	if (seteuid(pw_uid))
 		err("main: start server as root");
 
-	player_subscribe(player, encoder);
-
 	int i;
 	for (i = 0; i < nbcmds; i++)
 	{
 		if(cmds[i].ctx != NULL)
 		{
-			cmds[i].ops->run(cmds[i].ctx);
+			cmds[i].ops->run(cmds[i].ctx, sink);
 		}
 	}
 

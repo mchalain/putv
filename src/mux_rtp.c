@@ -274,20 +274,14 @@ static void *mux_thread(void *arg)
 		warn("mux: rtp stream %u %u %s",ctx->header.ssrc, ctx->estreams[i].pt, ctx->estreams[i].mime);
 	}
 	mux_dbg("mux: rtp thread start");
+#ifdef RTP_TIMESTAMPS
+	clock_gettime(CLOCK_REALTIME, &ctx->timestamp);
+#endif
 	while (run)
 	{
 		run = 0;
 		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 		{
-			/// transfer heartbeat from encoder to sink
-			if (ctx->out->ops->heartbeat(ctx->out->ctx, NULL) == NULL)
-			{
-				heartbeat_t *heart = NULL;
-				jitter_t *in = ctx->estreams[i].in;
-				heart = in->ops->heartbeat(in->ctx, NULL);
-				if (heart != NULL)
-					ctx->out->ops->heartbeat(ctx->out->ctx, heart);
-			}
 			run = _mux_run(ctx, &ctx->estreams[i]);
 		}
 		if (run == 0)

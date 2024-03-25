@@ -37,6 +37,7 @@
 
 #include "player.h"
 #include "encoder.h"
+#include "heartbeat.h"
 #include "rtp.h"
 typedef struct mux_s mux_t;
 typedef struct mux_ops_s mux_ops_t;
@@ -55,10 +56,12 @@ struct mux_ctx_s
 	player_ctx_t *ctx;
 	mux_estream_t estreams[MAX_ESTREAM];
 	jitter_t *out;
+	heartbeat_t heartbeat;
 	rtpheader_t header;
 	rtpext_putvctrl_t *putvctrl;
 	pthread_t thread;
 	uint16_t seqnum;
+	struct timespec timestamp;
 	uint16_t volume;
 };
 #define MUX_CTX
@@ -211,6 +214,22 @@ static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 	}
 	ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
 	beat_pulse_t beat = {0};
+#ifdef MUX_HEARTBEAT
+	struct timespec now;
+	clock_gettime(CLOCK_REALTIME, &now);
+	if (now.tv_sec > ctx->timestamp.tv_sec ||
+		now.tv_nsec > (ctx->timestamp.tv_nsec + RTP_HEARTBEAT_TIMELAPS))
+	{
+		if (ctx->header.timestamp == UINT32_MAX)
+			ctx->header.timestamp = 0;
+		else
+			ctx->header.timestamp++;
+		ctx->timestamp.tv_nsec += RTP_HEARTBEAT_TIMELAPS;
+		ctx->timestamp.tv_nsec %= 1000000000;
+		ctx->timestamp.tv_sec += (ctx->timestamp.tv_nsec / 1000000000);
+		beat.pulses = 1;
+	}
+#endif
 	len += sizeof(ctx->header);
 
 	if (estream->extlen > 0 && estream->ext)
@@ -282,6 +301,18 @@ static void *mux_thread(void *arg)
 		run = 0;
 		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 		{
+#ifdef MUX_HEARTBEAT
+			if (ctx->out->ops->heartbeat(ctx->out->ctx, NULL) == NULL)
+			{
+				heartbeat_pulse_t config;
+				config.ms = RTP_HEARTBEAT_TIMELAPS / 1000000;
+				ctx->heartbeat.ops = heartbeat_pulse;
+				ctx->heartbeat.ctx = heartbeat_pulse->init(&config);
+				dbg("set heart %s %dms", ctx->out->ctx->name, config.ms);
+				ctx->out->ops->heartbeat(ctx->out->ctx, &ctx->heartbeat);
+				ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
+			}
+#endif
 			run = _mux_run(ctx, &ctx->estreams[i]);
 		}
 		if (run == 0)

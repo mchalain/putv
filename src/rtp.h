@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 
+#define RTP_HEARTBEAT_TIMELAPS 10000000 // ns <= 100 Hz
 struct rtpbits {
     uint32_t     cc:4;            // number of CSRC identifiers: 0
     uint32_t     x:1;             // has extension header: 0

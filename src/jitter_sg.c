@@ -455,6 +455,15 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	if (len == 0)
+	{
+		pthread_mutex_lock(&private->mutex);
+		private->out->state = SCATTER_READY;
+		pthread_mutex_unlock(&private->mutex);
+		pthread_cond_broadcast(&private->condpush);
+		return;
+	}
+
 	jitter_dbg(jitter, "pop %p %d", private->out, private->state);
 	if ((private->state == JITTER_STOP) ||
 		(private->out->state != SCATTER_POP))

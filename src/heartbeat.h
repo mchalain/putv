@@ -7,8 +7,8 @@
 typedef struct beat_samples_s beat_samples_t;
 struct beat_samples_s
 {
-	unsigned int nsamples;
-	int nloops;
+	uint16_t nsamples;
+	int16_t nloops; // TOCHECK
 };
 
 typedef struct heartbeat_samples_s heartbeat_samples_t;

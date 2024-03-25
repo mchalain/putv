@@ -191,48 +191,55 @@ static jitter_t *mux_jitter(mux_ctx_t *ctx, unsigned int index)
 
 static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 {
-	void *beat = NULL;
 	char *inbuffer;
 	jitter_t *in = estream->in;
-	inbuffer = in->ops->peer(in->ctx, &beat);
-	unsigned long inlength = in->ops->length(in->ctx);
-	if (inbuffer != NULL)
+	size_t len = 0;
+	char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	inbuffer = in->ops->peer(in->ctx, NULL);
+	if (inbuffer == NULL)
+		return 0;
+	mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
+	ctx->header.b.pt = estream->pt;
+	// copy header
+	memcpy(outbuffer, &ctx->header, sizeof(ctx->header));
+	ctx->header.b.m = 0;
+	ctx->seqnum++;
+	if (ctx->seqnum == UINT16_MAX)
 	{
-		int len = sizeof(ctx->header);
-		char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		ctx->seqnum = 0;
+		ctx->header.b.m = 1;
+	}
+	ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
+	beat_pulse_t beat = {0};
+	len += sizeof(ctx->header);
 
-		mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
-		ctx->header.b.pt = estream->pt;
-		// copy header
-		memcpy(outbuffer, &ctx->header, len);
-		ctx->header.b.m = 0;
-		ctx->seqnum++;
-		if (ctx->seqnum == UINT16_MAX)
-		{
-			ctx->seqnum = 0;
-			ctx->header.b.m = 1;
-		}
-		ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
-		if (estream->extlen > 0 && estream->ext)
-		{
-			ctx->header.b.x = 1;
-			memcpy(outbuffer + len, estream->ext, estream->extlen);
-			len += estream->extlen;
-		}
+	if (estream->extlen > 0 && estream->ext)
+	{
+		ctx->header.b.x = 1;
+		memcpy(outbuffer + len, estream->ext, estream->extlen);
+		len += estream->extlen;
+	}
 #ifdef DEBUG_0
-		int i;
-		fprintf(stderr, "header: ");
-		for (i = 0; i < len; i++)
-			fprintf(stderr, "%.2hhx ", outbuffer[i]);
-		fprintf(stderr, "\n");
+	fprintf(stderr, "header: ");
+	for (int i = 0; i < len; i++)
+		fprintf(stderr, "%.2hhx ", outbuffer[i]);
+	fprintf(stderr, "\n");
 #endif
+	while ((len + in->ops->length(in->ctx)) < ctx->out->ctx->size)
+	{
+		size_t inlength = in->ops->length(in->ctx);
 		// copy payload
 		memcpy(outbuffer + len, inbuffer, inlength);
 		len += inlength;
 
-		ctx->out->ops->push(ctx->out->ctx, len, beat);
 		in->ops->pop(in->ctx, inlength);
+		inbuffer = in->ops->peer(in->ctx, NULL);
+		if (inbuffer == NULL)
+			return 0;
 	}
+	in->ops->pop(in->ctx, 0);
+	mux_dbg("udp: packet %lu sent", len);
+	ctx->out->ops->push(ctx->out->ctx, len, &beat);
 	if (ctx->putvctrl)
 	{
 		size_t len = sizeof(ctx->header);

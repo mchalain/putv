@@ -78,8 +78,6 @@ struct encoder_ctx_s
 #define ENCODER_HEARTBEAT
 #endif
 
-#define ENCODER_VBR
-
 //#define DEFAULT_SAMPLERATE 48000
 #define NB_BUFFERS 6
 #ifndef DEFAULT_NCHANNELS
@@ -296,10 +294,13 @@ static void *lame_thread(void *arg)
 			beat.bitrate.length = ret;
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 #elif defined (ENCODER_HEARTBEAT)
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			beat.samples.nsamples = nsamples;
-			nsamples = 0;
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			if (nsamples > (ctx->samplerate / 20))
+			{
+				//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+				beat.samples.nsamples = nsamples;
+				nsamples = 0;
+				//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			}
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, &beat);
 			ctx->outbuffer = NULL;

@@ -40,11 +40,7 @@ typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
 {
 	int run;
-	unsigned int bitrate;
 	unsigned int ms;
-	uint16_t length;
-	uint16_t previous;
-	uint16_t thredhold;
 	struct timespec clock;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
@@ -68,12 +64,9 @@ struct heartbeat_ctx_s
 
 static heartbeat_ctx_t *heartbeat_init(void *arg)
 {
-	heartbeat_bitrate_t *config = (heartbeat_bitrate_t *)arg;
+	heartbeat_pulse_t *config = (heartbeat_pulse_t *)arg;
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->bitrate = config->bitrate;
 	ctx->ms = config->ms;
-	// bitrate in kB/s, the alarm rings each around 500 ms
-	ctx->thredhold = ctx->bitrate * config->ms / 8;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 
@@ -148,27 +141,14 @@ static void heartbeat_start(heartbeat_ctx_t *ctx)
 
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
-	beat_bitrate_t *beat = (beat_bitrate_t *)arg;
-	if (ctx->bitrate == 0)
-		return -1;
-
-	ctx->length += beat->length;
-	if (ctx->length < ctx->thredhold)
-		return 0;
+	beat_pulse_t *beat = (beat_pulse_t *)arg;
+	uint16_t pulses = beat->pulses;
 	pthread_mutex_lock(&ctx->mutex);
-
-	pthread_cond_wait(&ctx->cond, &ctx->mutex);
-#ifdef DEBUG
-	clockid_t clockid = CLOCK_REALTIME;
-	struct timespec now;
-	clock_gettime(clockid, &now);
-	heartbeat_dbg("heartbeat: boom %lu.%09lu %lu.%03lu %ld/%ld",
-			now.tv_sec, now.tv_nsec,
-			ctx->ms/1000, ctx->ms,
-			ctx->thredhold, ctx->length - ctx->previous);
-#endif
-	ctx->length -= ctx->thredhold;
-	ctx->previous = ctx->length;
+	while (pulses > 0)
+	{
+		pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		pulses --;
+	}
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;
 }
@@ -183,7 +163,7 @@ static int heartbeat_unlock(heartbeat_ctx_t *ctx)
 	return pthread_mutex_unlock(&ctx->mutex);
 }
 
-const heartbeat_ops_t *heartbeat_bitrate = &(heartbeat_ops_t)
+const heartbeat_ops_t *heartbeat_pulse = &(heartbeat_ops_t)
 {
 	.init = heartbeat_init,
 	.start = heartbeat_start,

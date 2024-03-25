@@ -38,6 +38,7 @@ putv_SOURCES-$(MEDIA_FILE)+=media_file.c
 putv_SOURCES-$(MEDIA_DIR)+=media_dir.c
 putv_SOURCES-$(HEARTBEAT)+=heartbeat_samples.c
 putv_SOURCES-$(HEARTBEAT)+=heartbeat_bitrate.c
+putv_SOURCES-$(HEARTBEAT)+=heartbeat_pulse.c
 putv_CFLAGS-$(HEARTBEAT)+=-DHEARTBEAT_COEF_1000=1000
 putv_LIBS-$(HEARTBEAT)+=rt
 putv_SOURCES-$(SRC_FILE)+=src_file.c

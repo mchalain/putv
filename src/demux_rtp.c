@@ -64,6 +64,7 @@ struct demux_out_s
 {
 	decoder_t *estream;
 	uint32_t ssrc;
+	uint32_t ssrc2;
 	jitter_t *jitter;
 	char *data;
 	const char *mime;
@@ -101,6 +102,7 @@ struct demux_ctx_s
 	const char *host;
 	const char *port;
 	uint32_t sessionid;
+	uint32_t sessionid2;
 	pthread_t thread;
 	event_listener_t *listener;
 	demux_profile_t *profiles;
@@ -243,6 +245,57 @@ void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime)
 	ctx->profiles = profile;
 }
 
+static demux_out_t *_demux_getout(demux_ctx_t *ctx, uint32_t ssrc, rtpheader_t *header, rtpext_t *extheader)
+{
+	demux_out_t *out;
+	out = ctx->out;
+	while (out != NULL && out->ssrc != ssrc && out->ssrc2 != ssrc && out->pt != header->b.pt)
+		out = out->next;
+	if (out == NULL)
+	{
+		if (!(ssrc % 2))
+		{
+			ctx->sessionid = ssrc;
+			ctx->sessionid2 = ssrc + 1;
+		}
+		else
+		{
+			ctx->sessionid = ssrc - 1;
+			ctx->sessionid2 = ssrc;
+		}
+		const char * mime = mime_octetstream;
+		mime = demux_profile(ctx, header->b.pt);
+		warn("demux: new rtp substream %d %s(%d)", header->ssrc, mime, header->b.pt);
+		if (mime == mime_octetstream)
+			return NULL;
+		out = calloc(1, sizeof(*out));
+		out->mime = mime;
+		out->ssrc = __bswap_32(ctx->sessionid);
+		out->ssrc2 = __bswap_32(ctx->sessionid2);
+		out->pt = header->b.pt;
+		out->cc = header->b.cc;
+		out->next = ctx->out;
+		ctx->out = out;
+		warn("demux: new rtp substream %d %s(%d)", header->ssrc, out->mime, header->b.pt);
+		event_listener_t *listener = ctx->listener;
+		const char *ext = NULL;
+		if (extheader)
+			ext = (char *)(extheader + sizeof (*extheader));
+		const src_t src = { .ops = demux_rtp, .ctx = ctx, .info = ext };
+		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};
+		event_decode_es_t event_decode = {.src = &src};
+		while (listener != NULL)
+		{
+			listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+			event_decode.pid = event.pid;
+			event_decode.decoder = event.decoder;
+			listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+			listener = listener->next;
+		}
+	}
+	return out;
+}
+
 static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 {
 	size_t orig = len;
@@ -286,7 +339,7 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		len -= extheader->extlength;
 	}
 	/// player currently support only one session
-	if (ctx->sessionid != 0 && ctx->sessionid != ssrc)
+	if (ctx->sessionid != 0 && ctx->sessionid != ssrc && ctx->sessionid2 != ssrc)
 	{
 		demux_profile_t *it = ctx->sessionlist;
 		while(it != NULL)
@@ -328,47 +381,15 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 			player_volume(ctx->player, cmd->data % 100);
 		return 0;
 	}
-	demux_out_t *out;
-	out = ctx->out;
-	while (out != NULL && out->ssrc != ssrc && out->pt != header->b.pt)
-		out = out->next;
-	if (out == NULL)
-	{
-		ctx->sessionid = ssrc;
-		const char * mime = mime_octetstream;
-		mime = demux_profile(ctx, header->b.pt);
-		warn("demux: new rtp substream %d %s(%d)", header->ssrc, mime, header->b.pt);
-		if (mime == mime_octetstream)
-			return -1;
-		out = calloc(1, sizeof(*out));
-		out->mime = mime;
-		out->ssrc = header->ssrc;
-		out->pt = header->b.pt;
-		out->cc = header->b.cc;
-		out->next = ctx->out;
-		ctx->out = out;
-		warn("demux: new rtp substream %d %s(%d)", header->ssrc, out->mime, header->b.pt);
-		event_listener_t *listener = ctx->listener;
-		const char *ext = NULL;
-		if (extheader)
-			ext = (char *)(extheader + sizeof (*extheader));
-		const src_t src = { .ops = demux_rtp, .ctx = ctx, .info = ext };
-		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};
-		event_decode_es_t event_decode = {.src = &src};
-		while (listener != NULL)
-		{
-			listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
-			event_decode.pid = event.pid;
-			event_decode.decoder = event.decoder;
-			listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
-			listener = listener->next;
-		}
-	}
+	if (ctx->sessionid2 == ssrc && ctx->seqnum >= seqnum)
+		return 0;
+	demux_out_t *out = _demux_getout(ctx, ssrc, header, extheader);
+	/// if the stream is duplicated the sequnum is received twice
 #ifdef DEMUX_RTP_REORDER
 	demux_reorder_t *reorder = &ctx->reorder[seqnum % ctx->nbbuffers];
 	int id = seqnum % (ctx->nbbuffers * NB_LOOPS);
 
-	if (out->jitter != NULL && reorder->ready && reorder->id != id)
+	if (out && out->jitter != NULL && reorder->ready && reorder->id != id)
 	{
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
@@ -396,7 +417,7 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		}
 	}
 #else
-	if (out->jitter != NULL)
+	if (out && out->jitter != NULL)
 	{
 		if (ctx->seqnum == 0)
 			ctx->seqorig = ctx->seqnum = seqnum - 1;

@@ -25,6 +25,7 @@ typedef enum jitte_s {
 	JITTE_LOW,
 	JITTE_MID,
 	JITTE_HIGH,
+	JITTE_LAST,
 } jitte_t;
 
 typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);

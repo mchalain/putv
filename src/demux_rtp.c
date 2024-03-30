@@ -45,7 +45,7 @@ typedef struct src_s demux_t;
 typedef struct src_ops_s demux_ops_t;
 
 #define NB_LOOPS 21
-#define NB_BUFFERS 8
+#define NB_BUFFERS 24
 #define BUFFERSIZE 1500
 
 #ifdef DEMUX_RTP_REORDER
@@ -201,25 +201,24 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	err("dump %d", ctx->dumpfd);
 #endif
 
-	if (ctx->in == NULL)
-	{
-		int nbbuffers = ctx->nbbuffers;
-		ctx->in = jitter_init(JITTER_TYPE_SG, jitter_name, nbbuffers, BUFFERSIZE);
-#ifdef USE_REALTIME
-		ctx->in->ops->lock(ctx->in->ctx);
-#endif
-		ctx->in->format = SINK_BITSSTREAM;
-		ctx->in->ctx->thredhold = nbbuffers * 1 / 4;
-	}
 	return ctx;
 }
 
 static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
-	if (ctx->jitte < jitte)
+	if (ctx->in == NULL)
+	{
+		int nbbuffers = ctx->nbbuffers << jitte;
+		ctx->in = jitter_init(JITTER_TYPE_SG, jitter_name, nbbuffers, BUFFERSIZE);
+#ifdef USE_REALTIME
+		ctx->in->ops->lock(ctx->in->ctx);
+#endif
+		ctx->in->format = SINK_BITSSTREAM;
+	}
+	if (ctx->jitte != jitte)
 	{
 		ctx->jitte = jitte;
-		ctx->in->ctx->thredhold *= (jitte + 1);
+		ctx->in->ctx->thredhold = ctx->nbbuffers * (jitte + 1) / JITTE_LAST;
 	}
 	return ctx->in;
 }
@@ -244,8 +243,9 @@ void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime)
 	ctx->profiles = profile;
 }
 
-static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
+static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 {
+	size_t orig = len;
 	rtpheader_t *header = (rtpheader_t *)input;
 	uint16_t seqnum = __bswap_16(header->b.seqnum);
 	//dbg("demux: rtp seqnum %#x %#x", header->b.seqnum, seqnum);
@@ -402,6 +402,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			ctx->seqorig = ctx->seqnum = seqnum - 1;
 		ctx->seqnum++;
 		unsigned long missing = 0;
+#if 0
 		while (ctx->seqnum < seqnum)
 		{
 #if 0
@@ -424,9 +425,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			missing++;
 			ctx->seqnum++;
 		}
+#else
+		missing = seqnum - ctx->seqnum;
+#endif
 		if (missing > 0)
 		{
 			ctx->missing += missing;
+			ctx->seqnum = seqnum;
 			warn("demux: %lu packet missing %u", missing, ctx->seqnum - ctx->seqorig);
 		}
 		if (out->data == NULL)
@@ -468,6 +473,12 @@ static void *demux_thread(void *arg)
 	{
 		char *input;
 		size_t len = 0;
+		if (ctx->in == NULL)
+		{
+			err("demux: jitter null");
+			sleep(1);
+			continue;
+		}
 		input = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (input == NULL)
 		{
@@ -475,8 +486,9 @@ static void *demux_thread(void *arg)
 		}
 		else
 		{
+			size_t ret = 0;
 			len = ctx->in->ops->length(ctx->in->ctx);
-			if ( demux_parseheader(ctx, input, len) < 0)
+			if ((ret = demux_parseheader(ctx, input, len)) == (size_t) -1)
 			{
 				demux_dbg("demux: rtp stream unknown");
 			}

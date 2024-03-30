@@ -279,9 +279,9 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	return ctx;
 }
 
-static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+static ssize_t _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
-	int ret;
+	ssize_t ret;
 	fd_set rfds;
 	int maxfd = ctx->sock;
 	FD_ZERO(&rfds);
@@ -292,7 +292,7 @@ static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 		err("udp select %d %s", ret, strerror(errno));
 		return -1;
 	}
-	int length;
+	ssize_t length;
 	ret = ioctl(ctx->sock, FIONREAD, &length);
 	if (length > ctx->out->ctx->size)
 		warn("src: fionread %d > %ld", length, ctx->out->ctx->size);
@@ -363,10 +363,10 @@ static void *_src_thread(void *arg)
 			ctx->state = STATE_ERROR;
 			break;
 		}
-		ret = _src_read(ctx, buff, ctx->out->ctx->size);
-		if (ret > 0)
+		ssize_t length = _src_read(ctx, buff, ctx->out->ctx->size);
+		if (length != -1)
 		{
-			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
+			ctx->out->ops->push(ctx->out->ctx, length, NULL);
 		}
 	}
 	dbg("src: thread end");

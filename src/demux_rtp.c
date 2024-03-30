@@ -41,6 +41,7 @@
 #include "player.h"
 #include "decoder.h"
 #include "event.h"
+#include "heartbeat.h"
 typedef struct src_s demux_t;
 typedef struct src_ops_s demux_ops_t;
 
@@ -90,6 +91,7 @@ struct demux_ctx_s
 	player_ctx_t *player;
 	jitter_t *in;
 	jitte_t jitte;
+	heartbeat_t heartbeat;
 	unsigned short nbbuffers;
 	unsigned short seqnum;
 	unsigned short seqorig;
@@ -97,6 +99,7 @@ struct demux_ctx_s
 #ifdef DEMUX_RTP_REORDER
 	demux_reorder_t *reorder;
 #endif
+	uint32_t lasttimestamp;
 	const char *mime;
 	char *url;
 	const char *host;
@@ -373,16 +376,17 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		rtpext_putvctrl_t *putvctrl = (rtpext_putvctrl_t *)(((char *)extheader) + sizeof (*extheader));
 		if (putvctrl->version != PUTVCTRL_VERSION)
 			err("demux: bad ctrl version");
+		len -= sizeof(rtpext_putvctrl_t);
 		rtpext_putvctrl_cmd_t *cmd = &putvctrl->cmd;
 		dbg("demu: rtp ctl %u %u", cmd->id, cmd->data);
 		if (cmd->id == PUTVCTRL_ID_STATE && cmd->data == STATE_STOP)
 			ctx->sessionid = 0;
 		if (cmd->id == PUTVCTRL_ID_VOLUME)
 			player_volume(ctx->player, cmd->data % 100);
-		return 0;
+		return orig - len;
 	}
 	if (ctx->sessionid2 == ssrc && ctx->seqnum >= seqnum)
-		return 0;
+		return orig;
 	demux_out_t *out = _demux_getout(ctx, ssrc, header, extheader);
 	/// if the stream is duplicated the sequnum is received twice
 #ifdef DEMUX_RTP_REORDER
@@ -476,13 +480,19 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		}
 		memcpy(out->data, input, len);
 		demux_dbg("demux: push %ld", len);
-		out->jitter->ops->push(out->jitter->ctx, len, NULL);
+		beat_t beat = {0};
+#ifdef DEMUX_HEARTBEAT
+		beat.pulse.pulses = header->timestamp - ctx->lasttimestamp;
+#endif
+		out->jitter->ops->push(out->jitter->ctx, len, &beat);
+		len = 0;
 		out->data = NULL;
 	}
 	else
-		len = -1;
+		return -1;
 #endif
-	return len;
+	ctx->lasttimestamp = header->timestamp;
+	return orig - len;
 }
 
 static void *demux_thread(void *arg)
@@ -620,6 +630,18 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 	{
 		out->estream = decoder;
 		out->jitter = out->estream->ops->jitter(out->estream->ctx, ctx->jitte);
+#ifdef DEMUX_HEARTBEAT
+		if (ctx->heartbeat.ops == NULL)
+		{
+			heartbeat_pulse_t config;
+			config.ms = RTP_HEARTBEAT_TIMELAPS / 1000000;
+			ctx->heartbeat.ops = heartbeat_pulse;
+			ctx->heartbeat.ctx = heartbeat_pulse->init(&config);
+			dbg("set heart %s %dms", out->jitter->ctx->name, config.ms);
+			out->jitter->ops->heartbeat(out->jitter->ctx, &ctx->heartbeat);
+			ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
+		}
+#endif
 	}
 	return 0;
 }

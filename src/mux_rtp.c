@@ -124,6 +124,7 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 {
 	mux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	uint32_t ssrc = random();
+	ssrc <<= 1; /// set an even number
 	if (search)
 	{
 		const char *string = strstr(search, "ssrc=");
@@ -132,6 +133,8 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 			string += 5;
 			if (sscanf(string, "0x%08x", &ssrc) == 0)
 				sscanf(string, "%010x", &ssrc);
+			if ((ssrc % 2) == 1)
+				warn("demux: rtp src id is odd");
 		}
 	}
 	int i;

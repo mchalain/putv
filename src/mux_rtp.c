@@ -56,13 +56,16 @@ struct mux_ctx_s
 	player_ctx_t *ctx;
 	mux_estream_t estreams[MAX_ESTREAM];
 	jitter_t *out;
+	void *buffer;
 	heartbeat_t heartbeat;
 	rtpheader_t header;
 	rtpext_putvctrl_t *putvctrl;
 	pthread_t thread;
+	uint32_t ssrc;
 	uint16_t seqnum;
 	struct timespec timestamp;
 	uint16_t volume;
+	int mode;
 };
 #define MUX_CTX
 #include "mux.h"
@@ -82,6 +85,7 @@ struct mux_ctx_s
 
 #define LATENCE_MS 5
 #define MUXJITTER_SIZE 8
+#define MUX_DOUBLESSRC 0x01
 
 static const char *jitter_name = "rtp muxer";
 static void _mux_player_cb(void *arg, event_t event, void *data)
@@ -136,6 +140,11 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 			if ((ssrc % 2) == 1)
 				warn("demux: rtp src id is odd");
 		}
+		string = strstr(search, "dupsrc");
+		if (string != NULL)
+		{
+			ctx->mode |= MUX_DOUBLESSRC;
+		}
 	}
 	int i;
 	while (search)
@@ -173,6 +182,7 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 	ctx->seqnum = random();
 	ctx->header.b.seqnum = __bswap_16(ctx->seqnum);
 	ctx->header.timestamp = random();
+	ctx->ssrc = ssrc;
 	ctx->header.ssrc = __bswap_32(ssrc);
 
 	warn("mux: rtp stream ssrc %#04x", ctx->header.ssrc);
@@ -200,7 +210,9 @@ static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 	char *inbuffer;
 	jitter_t *in = estream->in;
 	size_t len = 0;
-	char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	char *outbuffer = ctx->buffer;
+	if (!(ctx->mode & MUX_DOUBLESSRC))
+		outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 	inbuffer = in->ops->peer(in->ctx, NULL);
 	if (inbuffer == NULL)
 		return 0;
@@ -261,7 +273,18 @@ static int _mux_run(mux_ctx_t *ctx, mux_estream_t *estream)
 	}
 	in->ops->pop(in->ctx, 0);
 	mux_dbg("udp: packet %lu sent", len);
+	if (ctx->mode & MUX_DOUBLESSRC)
+	{
+		outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		memcpy(outbuffer, ctx->buffer, len);
+		ctx->out->ops->push(ctx->out->ctx, len, &beat);
+		rtpheader_t *header = ctx->buffer;
+		header->ssrc = __bswap_32(ctx->ssrc + 1);
+		outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		memcpy(outbuffer, ctx->buffer, len);
+	}
 	ctx->out->ops->push(ctx->out->ctx, len, &beat);
+
 	if (ctx->putvctrl)
 	{
 		size_t len = sizeof(ctx->header);
@@ -332,6 +355,9 @@ static void *mux_thread(void *arg)
 static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 {
 	ctx->out = sink_jitter;
+	if (ctx->buffer)
+		free(ctx->buffer);
+	ctx->buffer = calloc(1, sink_jitter->ctx->size);
 	pthread_create(&ctx->thread, NULL, mux_thread, ctx);
 	return 0;
 }
@@ -402,6 +428,8 @@ static void mux_destroy(mux_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+	if (ctx->buffer)
+		free(ctx->buffer);
 	for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++)
 	{
 		if (ctx->estreams[i].ext)

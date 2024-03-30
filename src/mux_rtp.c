@@ -81,7 +81,7 @@ struct mux_ctx_s
 #define mux_dbg(...)
 
 #define LATENCE_MS 5
-#define MUXJITTER_SIZE 6
+#define MUXJITTER_SIZE 8
 
 static const char *jitter_name = "rtp muxer";
 static void _mux_player_cb(void *arg, event_t event, void *data)

@@ -93,6 +93,7 @@ struct sink_ctx_s
 
 #define SINK_POLICY REALTIME_SCHED
 #define SINK_PRIORITY 65
+#define NBBUFFERS 6
 
 static const char *jitter_name = "udp socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
@@ -162,7 +163,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	jitter_format_t format = SINK_BITSSTREAM;
 	sink_ctx_t *ctx = NULL;
 	int sock;
-	int mtu = 1500;
+	int mtu = 1500 - IP_HEADER_LENGTH - UDP_HEADER_LENGTH;
 
 	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	//TODO: try IPPROTO_UDPLITE
@@ -205,7 +206,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 			}
 		}
 		if (ioctl(sock, SIOCGIFMTU, &ifr) != -1)
-			mtu = ifr.ifr_mtu;
+			mtu = ifr.ifr_mtu - IP_HEADER_LENGTH - UDP_HEADER_LENGTH; /// size of udp/ip header
 
 		int value=1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
@@ -277,12 +278,12 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		}
 
 		unsigned int size = mtu;
-		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
+		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NBBUFFERS, size);
 #ifdef USE_REALTIME
 		jitter->ops->lock(jitter->ctx);
 #endif
 		jitter->ctx->frequence = 0;
-		jitter->ctx->thredhold = 3;
+		jitter->ctx->thredhold = NBBUFFERS / 2;
 		jitter->format = format;
 		ctx->in = jitter;
 #ifdef MUX
@@ -357,6 +358,8 @@ static void *sink_thread(void *arg)
 			break;
 		}
 
+		/// udp send block (MTU sizing) after block
+		//size_t length = ctx->in->ctx->size;
 		size_t length = ctx->in->ops->length(ctx->in->ctx);
 
 #ifdef UDP_MARKER
@@ -367,42 +370,31 @@ static void *sink_thread(void *arg)
 		marker++;
 #endif
 		ret = 0;
-		size_t len = length;
-		while (len > 0)
+		int maxfd = ctx->sock;
+		fd_set wfds;
+		FD_ZERO(&wfds);
+		FD_SET(ctx->sock, &wfds);
+		ret = select(maxfd + 1, NULL, &wfds, NULL, NULL);
+		if (ret > 0 && FD_ISSET(ctx->sock, &wfds))
 		{
-			int maxfd = ctx->sock;
-			fd_set wfds;
-			FD_ZERO(&wfds);
-			FD_SET(ctx->sock, &wfds);
-			ret = select(maxfd + 1, NULL, &wfds, NULL, NULL);
-			if (ret > 0 && FD_ISSET(ctx->sock, &wfds))
-			{
-				ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
-						(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
-				sink_dbg("udp: send %d", ret);
-			}
-			if (ret < 0)
-			{
-				if (errno == EAGAIN)
-					continue;
-				err("sink: udp send error %s", strerror(errno));
-				close(ctx->sock);
-				run = 0;
-				break;
-			}
-			else
-			{
-#ifdef UDP_DUMP
-				write(ctx->dumpfd, buff, ret);
-#endif
-			}
-			len -= ret;
-			buff += ret;
-			sched_yield();
+			ret = sendto(ctx->sock, buff, length, MSG_NOSIGNAL| MSG_DONTWAIT,
+					(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+			sink_dbg("udp: send %d", ret);
 		}
-		if (len == 0)
+		if (ret < 0)
 		{
-			sink_dbg("sink: udp play %d", ret);
+			if (errno == EAGAIN)
+				continue;
+			err("sink: udp send %lu error %s", length, strerror(errno));
+			close(ctx->sock);
+			run = 0;
+			break;
+		}
+		else
+		{
+#ifdef UDP_DUMP
+			write(ctx->dumpfd, buff, ret);
+#endif
 			ctx->counter++;
 		}
 
@@ -413,6 +405,7 @@ static void *sink_thread(void *arg)
 #endif
 		ctx->in->ops->pop(ctx->in->ctx, length);
 	}
+	sched_yield();
 	dbg("sink: thread end");
 	return NULL;
 }

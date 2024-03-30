@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 
+#define IP_HEADER_LENGTH 20
+#define UDP_HEADER_LENGTH 8
+
 #define RTP_HEARTBEAT_TIMELAPS 10000000 // ns <= 100 Hz
 struct rtpbits {
     uint32_t     cc:4;            // number of CSRC identifiers: 0

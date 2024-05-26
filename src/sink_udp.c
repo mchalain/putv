@@ -67,6 +67,7 @@ struct sink_ctx_s
 	int nchannels;
 	int sock;
 	int counter;
+	int waiting;
 	char *sink_txt[10];
 #ifdef MUX
 	mux_t *mux;
@@ -99,6 +100,7 @@ static const char *jitter_name = "udp socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int ret = 0;
+	int waiting = 0;
 	const encoder_ops_t *encoder = encoder_lame;
 
 	const char *protocol = NULL;
@@ -156,6 +158,11 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		if (mime != NULL)
 		{
 			encoder = encoder_check(mime + 5);
+		}
+		const char *string = strstr(search, "waiting=");
+		if (string != NULL)
+		{
+			waiting = atoi(string + 8);
 		}
 	}
 
@@ -266,6 +273,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		ctx->player = player;
 		ctx->sock = sock;
 		ctx->encoder = encoder;
+		ctx->waiting = waiting;
 		memcpy(&ctx->saddr, &saddr, sizeof(saddr));
 		int i = 0;
 		if (asprintf(&ctx->sink_txt[i++], "h=%s", host) < 0)
@@ -388,6 +396,8 @@ static void *sink_thread(void *arg)
 #ifdef UDP_STATISTIC
 			statistic += ret;
 #endif
+			if (ctx->waiting > 0)
+				usleep(ctx->waiting);
 		}
 		if (ret < 0)
 		{

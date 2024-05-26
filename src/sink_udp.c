@@ -52,6 +52,14 @@
 #include "unix_server.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
+typedef struct addr_list_s addr_list_t;
+struct addr_list_s
+{
+	struct sockaddr_storage saddr;
+	socklen_t saddrlen;
+	addr_list_t *next;
+};
+
 struct sink_ctx_s
 {
 	player_ctx_t *player;
@@ -59,7 +67,7 @@ struct sink_ctx_s
 	event_listener_t *listener;
 
 	const char *filepath;
-	struct sockaddr_in saddr;
+	addr_list_t *addr;
 	pthread_t thread;
 	state_t state;
 	unsigned int samplerate;
@@ -179,7 +187,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	memset(&saddr, 0, sizeof(struct in_addr));
 	saddr.sin_family = PF_INET;
 	saddr.sin_port = htons(0); // Use the first free port
-	saddr.sin_addr.s_addr = htonl(if_addr); // bind socket to any interface
+	saddr.sin_addr.s_addr = htonl(if_addr);
 
 	ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -263,7 +271,6 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		saddr.sin_family = PF_INET;
 		saddr.sin_addr.s_addr = longaddress;
 		saddr.sin_port = htons(iport);
-
 	}
 	if (sock > 0 && ret == 0)
 	{
@@ -274,7 +281,13 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		ctx->sock = sock;
 		ctx->encoder = encoder;
 		ctx->waiting = waiting;
-		memcpy(&ctx->saddr, &saddr, sizeof(saddr));
+		if (saddr.sin_addr.s_addr != 0)
+		{
+			addr_list_t *addr = calloc(1, sizeof(*addr));
+			addr->saddrlen = sizeof(saddr);
+			memcpy(&(addr->saddr), &saddr, addr->saddrlen);
+			ctx->addr = addr;
+		}
 		int i = 0;
 		if (asprintf(&ctx->sink_txt[i++], "h=%s", host) < 0)
 		{
@@ -390,31 +403,33 @@ static void *sink_thread(void *arg)
 		ret = select(maxfd + 1, NULL, &wfds, NULL, NULL);
 		if (ret > 0 && FD_ISSET(ctx->sock, &wfds))
 		{
-			ret = sendto(ctx->sock, buff, length, MSG_NOSIGNAL| MSG_DONTWAIT,
-					(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
-			sink_dbg("udp: send %d", ret);
+			for (addr_list_t *it = ctx->addr; it != NULL; it = it->next)
+			{
+				ret = sendto(ctx->sock, buff, length, MSG_NOSIGNAL| MSG_DONTWAIT,
+						(struct sockaddr *)&it->saddr, it->saddrlen);
+				sink_dbg("udp: send %d", ret);
+				if (ret < 0)
+				{
+					if (errno == EAGAIN)
+						continue;
+					unsigned long longaddress = ((struct sockaddr_in*)&(it->saddr))->sin_addr.s_addr;
+					if (IN_MULTICAST(longaddress))
+						err("sink: udp multicast not routed");
+					else
+						err("sink: udp send %lu error %s", length, strerror(errno));
+					sinkudp_unregister(ctx, (struct sockaddr_in*)&(it->saddr));
+				}
+			}
 #ifdef UDP_STATISTIC
-			statistic += ret;
+			statistic += length;
 #endif
 			if (ctx->waiting > 0)
 				usleep(ctx->waiting);
 		}
-		if (ret < 0)
-		{
-			if (errno == EAGAIN)
-				continue;
-			err("sink: udp send %lu error %s", length, strerror(errno));
-			close(ctx->sock);
-			run = 0;
-			break;
-		}
-		else
-		{
 #ifdef UDP_DUMP
-			write(ctx->dumpfd, buff, ret);
+		write(ctx->dumpfd, buff, ret);
 #endif
-			ctx->counter++;
-		}
+		ctx->counter++;
 
 #ifdef DEBUG
 		struct timespec now;
@@ -489,8 +504,10 @@ static int sink_run(sink_ctx_t *ctx)
 static const char *sink_service(void * arg, const char **target, int *port, const char **txt[])
 {
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
-	*target = inet_ntoa(ctx->saddr.sin_addr);
-	*port = htons(ctx->saddr.sin_port);
+	if (ctx->addr == NULL)
+		return NULL;
+	*target = inet_ntoa(((struct sockaddr_in*)&(ctx->addr->saddr))->sin_addr);
+	*port = htons(((struct sockaddr_in*)&(ctx->addr->saddr))->sin_port);
 	*txt = ctx->sink_txt;
 	return rtp_service;
 }
@@ -508,6 +525,33 @@ static void sink_destroy(sink_ctx_t *ctx)
 		close(ctx->dumpfd);
 #endif
 	free(ctx);
+}
+
+int sinkudp_register(void * arg, struct sockaddr_in *saddr)
+{
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	addr_list_t *newaddr = calloc(1, sizeof(*newaddr));
+	newaddr->saddrlen = sizeof(*saddr);
+	memcpy(&newaddr->saddr, saddr, newaddr->saddrlen);
+	newaddr->next = ctx->addr;
+	ctx->addr = newaddr;
+	return 0;
+}
+
+void sinkudp_unregister(void * arg, struct sockaddr_in *saddr)
+{
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	addr_list_t *addr = ctx->addr;
+	if (((struct sockaddr_in*)&(addr->saddr))->sin_addr.s_addr == saddr->sin_addr.s_addr)
+		ctx->addr = addr->next;
+	else
+		for (addr_list_t *it = ctx->addr; it->next != NULL; it = it->next)
+		{
+			addr = it->next;
+			if (((struct sockaddr_in*)&(addr->saddr))->sin_addr.s_addr == saddr->sin_addr.s_addr)
+				it->next = addr->next;
+		}
+	free(addr);
 }
 
 const sink_ops_t *sink_udp = &(sink_ops_t)

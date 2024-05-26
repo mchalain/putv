@@ -36,4 +36,8 @@ struct sink_s
 sink_t *sink_build(player_ctx_t *, const char *arg);
 
 int parse_audioparameters(const char *setting, jitter_format_t *format, int *rate, char **mixer);
+
+int sinkudp_register(void * arg, struct sockaddr_in *saddr);
+void sinkudp_unregister(void * arg, struct sockaddr_in *saddr);
+
 #endif

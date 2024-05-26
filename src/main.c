@@ -109,6 +109,7 @@ void help(const char *name)
 	fprintf(stderr, "\t -a\t\tAuto play enabled\n");
 	fprintf(stderr, "\t -r\t\tShuffle enabled\n");
 	fprintf(stderr, "\t -l\t\tLoop enabled\n");
+	fprintf(stderr, "\t -B\t\tBonjour protocol enabled\n");
 	fprintf(stderr, "\t -R <directory>\tSet the directory for command socket file\n");
 	fprintf(stderr, "\t -d <directory>\tSet the working directory\n");
 	fprintf(stderr, "\t -P <priority>\tSet the process priority\n");
@@ -160,6 +161,7 @@ static encoder_t *main_encoder(player_ctx_t *player, sink_t *sink)
 #define LOOP 0x08
 #define RANDOM 0x10
 #define KILLDAEMON 0x20
+#define MDNS 0x40
 int main(int argc, char **argv)
 {
 	int priority = 0;
@@ -178,7 +180,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:m:o:u:p:f:hDKVxalrL:d:P:");
+		opt = getopt(argc, argv, "R:n:m:o:u:p:f:hDKVxalrL:d:P:B");
 		switch (opt)
 		{
 			case 'R':
@@ -232,6 +234,9 @@ int main(int argc, char **argv)
 			break;
 			case 'P':
 				priority = strtol(optarg, NULL, 10);
+			break;
+			case 'B':
+				mode |= MDNS;
 			break;
 		}
 	} while(opt != -1);
@@ -362,29 +367,32 @@ int main(int argc, char **argv)
 	nbcmds++;
 #endif
 #ifdef TINYSVCMDNS
+	if (mode == MDNS)
+	{
 #define MDNS_PATH "path="INDEX_HTML
-	const char *txt[] =
-	{
-		MDNS_PATH,
+		const char *txt[] =
+		{
+			MDNS_PATH,
 #ifdef NETIF
-		"if="NETIF,
+			"if="NETIF,
 #endif
-		NULL,
-	};
-	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt);
-	nbcmds++;
+			NULL,
+		};
+		cmds[nbcmds].ops = cmds_tinysvcmdns;
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt);
+		nbcmds++;
 #ifdef NETIF2
-	const char *txt2[] =
-	{
-		"path="STRINGIFY(INDEX_HTML),
-		"if="NETIF2,
-		NULL,
-	};
-	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt2);
-	nbcmds++;
+		const char *txt2[] =
+		{
+			"path="STRINGIFY(INDEX_HTML),
+			"if="NETIF2,
+			NULL,
+		};
+		cmds[nbcmds].ops = cmds_tinysvcmdns;
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt2);
+		nbcmds++;
 #endif
+	}
 #endif
 
 	sink_t *sink = NULL;

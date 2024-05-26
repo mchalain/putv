@@ -134,21 +134,27 @@ int pcm_format_from(jitter_format_t format)
 	switch(format)
 	{
 		case PCM_32bits_LE_stereo:
+			sink_dbg("alsa: format 32 bits signed Little Endian Stereo");
 			return SND_PCM_FORMAT_S32_LE;
 		break;
 		case PCM_24bits4_LE_stereo:
+			sink_dbg("alsa: format 32/24 bits signed Little Endian Stereo");
 			return SND_PCM_FORMAT_S24_LE;
 		break;
 		case PCM_24bits3_LE_stereo:
+			sink_dbg("alsa: format 24 bits signed Little Endian Stereo");
 			return SND_PCM_FORMAT_S24_3LE;
 		break;
 		case PCM_16bits_LE_stereo:
+			sink_dbg("alsa: format 16 bits signed Little Endian Stereo");
 			return SND_PCM_FORMAT_S16_LE;
 		break;
 		case PCM_16bits_LE_mono:
+			sink_dbg("alsa: format 16 bits signed Little Endian Mono");
 			return SND_PCM_FORMAT_S16_LE;
 		break;
 		case PCM_8bits_mono:
+			sink_dbg("alsa: format 8 bits signed Little Endian Mono");
 			return SND_PCM_FORMAT_S8;
 		break;
 	}
@@ -157,7 +163,7 @@ int pcm_format_from(jitter_format_t format)
 
 static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 {
-	jitter_format_t downformat = format;
+	jitter_format_t downformat = -1;
 	config->pcm_format = pcm_format_from(format);
 	config->samplesize = FORMAT_SAMPLESIZE(format) / 8;
 	config->nchannels = FORMAT_NCHANNELS(format);
@@ -169,6 +175,7 @@ static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 		case PCM_24bits4_LE_stereo:
 		case PCM_24bits3_LE_stereo:
 			downformat = PCM_16bits_LE_stereo;
+		break;
 		case PCM_8bits_mono:
 			downformat = PCM_16bits_LE_mono;
 		break;
@@ -216,17 +223,17 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate
 	}
 
 	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
-	if (ret < 0)
+	while (ret < 0)
 	{
 		format = downformat;
-		_pcm_config(format, &config);
+		warn("sink: alsa downgrade format %#x", format);
+		downformat = _pcm_config(format, &config);
 		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
-		if (ret < 0)
+		if (ret < 0  && downformat == -1)
 		{
-			err("sink: format");
+			err("sink: PCM format not available");
 			goto error;
 		}
-		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
 	ctx->format = format;
 	ctx->nchannels = config.nchannels;

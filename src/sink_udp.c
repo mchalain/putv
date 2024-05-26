@@ -349,6 +349,11 @@ static void *sink_thread(void *arg)
 #ifdef UDP_MARKER
 	warn("sink: udp marker is ON");
 #endif
+#ifdef UDP_STATISTIC
+	struct timespec start;
+	clock_gettime(CLOCK_REALTIME, &start);
+	uint64_t statistic = 0;
+#endif
 	while (run)
 	{
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
@@ -380,6 +385,9 @@ static void *sink_thread(void *arg)
 			ret = sendto(ctx->sock, buff, length, MSG_NOSIGNAL| MSG_DONTWAIT,
 					(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
 			sink_dbg("udp: send %d", ret);
+#ifdef UDP_STATISTIC
+			statistic += ret;
+#endif
 		}
 		if (ret < 0)
 		{
@@ -402,6 +410,20 @@ static void *sink_thread(void *arg)
 		struct timespec now;
 		clock_gettime(CLOCK_REALTIME, &now);
 		sink_dbg("sink: boom %d %lu.%09lu", ctx->counter, now.tv_sec, now.tv_nsec);
+#ifdef UDP_STATISTIC
+#define UDP_STATISTIC_PERIOD 10
+		if (((now.tv_sec == (start.tv_sec + UDP_STATISTIC_PERIOD)) &&
+			now.tv_nsec > start.tv_nsec) ||
+			(now.tv_sec > (start.tv_sec + UDP_STATISTIC_PERIOD)))
+		{
+			uint64_t bitrate = statistic * 8 * 100;
+			int64_t period = ((now.tv_sec - start.tv_sec) * 100) + ((now.tv_nsec - start.tv_nsec) / 10000000);
+			bitrate /= period;
+			warn("sink: udp bitrate %llu kbps", bitrate/1000);
+			statistic = 0;
+			clock_gettime(CLOCK_REALTIME, &start);
+		}
+#endif
 #endif
 		ctx->in->ops->pop(ctx->in->ctx, length);
 	}

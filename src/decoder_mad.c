@@ -46,7 +46,6 @@ typedef struct decoder_ops_s decoder_ops_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
-	const decoder_ops_t *ops;
 	struct mad_decoder decoder;
 	pthread_t thread;
 
@@ -264,7 +263,6 @@ static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_mad;
 	ctx->player = player;
 
 	mad_decoder_init(&ctx->decoder, ctx,

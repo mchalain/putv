@@ -41,7 +41,6 @@ typedef struct decoder_ops_s decoder_ops_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
-	const decoder_ops_t *ops;
 	FLAC__StreamDecoder *decoder;
 	int nchannels;
 	uint32_t samplerate;
@@ -82,7 +81,6 @@ static const char *jitter_name = "flac decoder";
 static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_flac;
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 	ctx->player = player;

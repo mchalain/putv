@@ -42,10 +42,7 @@ controle_viewport = function() {
 		g_player.maxitems = g_maxitems;
 		g_player.list();
 	}
-	if ($('#playlist').hasClass('show'))
-		$('#info').removeClass('show');
-	else
-		$('#info').addClass('show');
+	$('#playlist').addClass('show');
 }
 
 class PlayerInfo extends PlayerCmd
@@ -309,7 +306,6 @@ var g_cmdbar = new CmdBarClient(function(message) {
 	break;
 	}
 }, "player");
-var g_initialization = new CmdBarControl(true);
 initIHM = function()
 {
 	$('.action-btn').addClass('hidden');
@@ -368,26 +364,28 @@ initIHM = function()
 	}
 	$('#volume-down').on("click", function() {
 		g_player.volume(-5);
-		volumemodal_update(300);
+		volumemodal_update(3000);
 	});
 	$('#volume-up').on("click", function() {
 		g_player.volume(5);
-		volumemodal_update(300);
+		volumemodal_update(3000);
 	});
 	$('#volume').on('show.bs.modal', function() {
 		volumemodal_update(3000);
 	});
+}
+
+medialist = function(url = "/apps/ouiradio.json")
+{
+	var g_initialization = new CmdBarControl(true);
 	g_initialization.addgroup([{
 		id:"playlist-toggle",
 		glyphicon:"music",
 		name:"toggle playlist",
 		classes:"d-lg-none"
 	}]);
-}
-medialist = function()
-{
 	$.ajax({
-		url: "/apps/ouiradio.json"
+		url: url
 	}).done(function(config) {
 		g_config = config;
 		var playerid = 0;
@@ -433,9 +431,13 @@ medialist = function()
 
 $(document).ready(function()
 {
+	let params = new URL(document.location).searchParams;
+	let name = undefined;
+	if (params.get("radio"))
+		name = params.get("radio");
 	controle_viewport();
 	initIHM();
-	medialist();
+	medialist(name);
 });
 
 window.addEventListener('unload', function(event) {

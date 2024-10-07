@@ -1,7 +1,8 @@
 {
 "players": [{"name":"speaker","url":"/putv","sink":"alsa"}],
 "media":[
-	{"name":"interne","media":"file:///media/","options":["random","loop","autostart"],"default":true},
-	{"name":"radio","media":"db://radio.db?readwrite","options":[]}
+	{"name":"interne","media":"file:///media/","options":["random"],"default":true},
+	{"name":"radio","media":"db://apps/radio.db?readwrite","options":[]},
+	{"name":"PC","media":"alsa://hw:1,0","options":[]}
 ]
 }

@@ -37,6 +37,8 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -101,7 +103,7 @@ extern const char *rtp_service;// _rtp._udp
 static const char *jitter_name = "udp socket";
 const char *rtp_service = "_rtp._udp.local";
 
-static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
+static int _src_connect(src_ctx_t *ctx, const char *host, int iport, const char *nif)
 {
 	int count = 2;
 
@@ -125,6 +127,37 @@ static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 		return -1;
 	}
 
+	in_addr_t if_addr = INADDR_ANY;
+
+#if 0
+	if (nif)
+	{
+		struct ifaddrs *ifa_list;
+		struct ifaddrs *ifa_main;
+
+		if (getifaddrs(&ifa_list) == 0)
+		{
+			for (ifa_main = ifa_list; ifa_main != NULL; ifa_main = ifa_main->ifa_next)
+			{
+				if (ifa_main->ifa_addr == NULL)
+					continue;
+				if (ifa_main->ifa_addr->sa_family != AF_INET)
+					continue;
+				char host[NI_MAXHOST];
+				getnameinfo(ifa_main->ifa_addr, sizeof(struct sockaddr_in),
+					host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+				if ((nif != NULL) && !strcmp(nif, ifa_main->ifa_name))
+					break;
+			}
+			if (ifa_main != NULL)
+			{
+				if_addr = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
+			}
+		}
+		else
+			err("src: network interface not found");
+	}
+#endif
 	struct sockaddr *addr = NULL;
 	int addrlen = 0;
 	struct sockaddr_in saddr;
@@ -133,7 +166,7 @@ static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 	{
 		memset(&saddr, 0, sizeof(struct sockaddr_in));
 		saddr.sin_family = PF_INET;
-		saddr.sin_addr.s_addr = INADDR_ANY; // bind socket to any interface
+		saddr.sin_addr.s_addr = if_addr;
 		saddr.sin_port = htons(iport); // Use the first free port
 		addr = (struct sockaddr*)&saddr;
 		addrlen = sizeof(saddr);
@@ -156,6 +189,14 @@ static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 	}
 	int value=1;
 	ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+
+	if (nif != NULL)
+	{
+		struct ifreq ifr = {0};
+		snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", nif);
+		if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, (void *)&ifr, sizeof(ifr)) < 0)
+			warn("src: interface binding error");
+	}
 
 	if ((af == AF_INET) && IN_MULTICAST(htonl(inaddr)))
 	{
@@ -228,6 +269,7 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	int iport = 5004;
 	if (port != NULL)
 		iport = atoi(port);
+	const char *nif = NULL;
 
 	if (search != NULL)
 	{
@@ -235,6 +277,11 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 		if (mime != NULL)
 		{
 			mime += 5;
+		}
+		nif = strstr(search, "if=");
+		if (nif != NULL)
+		{
+			nif += 3;
 		}
 	}
 	mime = utils_mime2mime(mime);
@@ -261,7 +308,7 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	}
 	if (host != NULL)
 	{
-		int sock = _src_connect(ctx, host, iport);
+		int sock = _src_connect(ctx, host, iport, nif);
 		ctx->sock = sock;
 		ctx->host = strdup(host);
 		ctx->port = iport;
@@ -289,15 +336,15 @@ static ssize_t _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 	if (ret != 1)
 	{
-		err("udp select %d %s", ret, strerror(errno));
+		err("udp select %ld %s", ret, strerror(errno));
 		return -1;
 	}
 	ssize_t length;
 	ret = ioctl(ctx->sock, FIONREAD, &length);
 	if (length > ctx->out->ctx->size)
-		warn("src: fionread %d > %ld", length, ctx->out->ctx->size);
+		warn("src: fionread %ld > %ld", length, ctx->out->ctx->size);
 	if (length == 0)
-		warn("src: fionread %d", length);
+		warn("src: fionread %ld", length);
 #ifdef UDP_MARKER
 	if (length == 4)
 	{

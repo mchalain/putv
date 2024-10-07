@@ -36,4 +36,5 @@ const encoder_ops_t *encoder_check(const char *path);
 extern const encoder_ops_t *encoder_passthrough;
 extern const encoder_ops_t *encoder_lame;
 extern const encoder_ops_t *encoder_flac;
+extern const encoder_ops_t *encoder_faac;
 #endif

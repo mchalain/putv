@@ -59,6 +59,10 @@ const encoder_ops_t *encoder_check(const char *path)
 		if (!strncmp(ext, ".flac", len))
 			encoder = encoder_flac;
 #endif
+#ifdef ENCODER_FAAC
+		if (!strncmp(ext, ".aac", len))
+			encoder = encoder_faac;
+#endif
 	}
 	else
 	{
@@ -68,6 +72,10 @@ const encoder_ops_t *encoder_check(const char *path)
 #endif
 #ifdef ENCODER_FLAC
 		if (!strncmp(path, mime_audioflac, len))
+			encoder = encoder_flac;
+#endif
+#ifdef ENCODER_FAAC
+		if (!strncmp(path, mime_audioaac, len))
 			encoder = encoder_flac;
 #endif
 	}

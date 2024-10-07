@@ -74,6 +74,11 @@ putv_LIBRARY-$(ENCODER_FLAC)+=flac
 ifeq ($(ENCODER_FLAC),y)
   ENCODER:=encoder_flac
 endif
+putv_SOURCES-$(ENCODER_FAAC)+=encoder_faac.c
+putv_LIBS-$(ENCODER_FAAC)+=faac
+ifeq ($(ENCODER_FAAC),y)
+  ENCODER:=encoder_faac
+endif
 putv_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
 ifeq ($(ENCODER_PASSTHROUGH),y)
   ENCODER:=encoder_passthrough

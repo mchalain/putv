@@ -19,7 +19,6 @@ OPTIONS=""
 DAEMON=putv
 
 OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON} -m ${CINPUT_JSON}"
-OPTIONS_CINPUT="${OPTIONS_CINPUT} -i ${CINPUT_DEVICE}"
 
 start_initcmd() {
   result=1
@@ -32,7 +31,10 @@ start_initcmd() {
 
 start_inputcmd() {
   result=1
-  if [ -c ${CINPUT_DEVICE} ]; then
+  if [ -n "${OPTIONS_CINPUT}" ]; then
+    if [ -n "${CINPUT_JSON}" ]; then
+      OPTIONS_CINPUT="${OPTIONS_CINPUT} -m ${CINPUT_JSON}"
+    fi
     ${CINPUT} -D ${OPTIONS_CLIENTS} -p ${PIDDIR}putv_input.pid ${OPTIONS_CINPUT}
     result=$?
   fi

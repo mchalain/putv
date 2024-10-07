@@ -1,7 +1,6 @@
 # putv config.
 PUTV_WEB=%PUTV_WEB%
 
-CINPUT_DEVICE="/dev/input/event0"
 CINPUT_JSON="${PUTV_WEB}/htdocs/apps/ouiradio.json"
 WEBSOCKETDIR="${PUTV_WEB}/websocket"
 WEBSOCKETNAME=%WEBSOCKETNAME%
@@ -17,3 +16,9 @@ if [ -z "$OUTPUT" ]; then
   fi
 fi
 
+for i in 0 1 2 3
+do
+  if [ -c /dev/input/event$i ]; then
+    OPTIONS_CINPUT="${OPTIONS_CINPUT} -i /dev/input/event$i"
+  fi
+done

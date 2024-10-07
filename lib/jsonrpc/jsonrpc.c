@@ -278,22 +278,29 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 		}
 	}
 
+	if (json_error) {
+		json_response = jsonrpc_error_response(json_id, json_error, userdata);
+		goto done;
+	}
+
 	if (entry == NULL || entry->name == NULL) {
 		json_response = jsonrpc_error_response(json_id,
 				jsonrpc_error_object_predefined(JSONRPC_METHOD_NOT_FOUND, NULL), userdata);
 		goto done;
 	}
 
-	if (entry->params_spec && json_error == NULL) {
-		json_error = jsonrpc_validate_params(json_params, entry->params_spec);
+	if (entry->params_spec) {
+		json_t *error_obj = jsonrpc_validate_params(json_params, entry->params_spec);
+		if (error_obj) {
+			json_response = jsonrpc_error_response(json_id, error_obj, userdata);
+			goto done;
+		}
 	}
 
 	if (entry->funcptr != NULL) {
 		rc = entry->funcptr(json_params, &json_result, userdata);
 		if (rc==0) {
 			json_response = jsonrpc_result_response(json_id, json_result);
-		} else if (json_error) {
-			json_response = jsonrpc_error_response(json_id, json_error, userdata);
 		} else {
 			json_response = jsonrpc_error_response(json_id, json_result, userdata);
 		}
@@ -396,9 +403,8 @@ json_t *jsonrpc_jrequest(const char *method,
 		goto done;
 	}
 
-	int ret = 0;
 	if (entry->funcptr) {
-		ret = entry->funcptr(NULL, &params, userdata);
+		entry->funcptr(NULL, &params, userdata);
 	}
 	if (entry->params_spec) {
 		json_t *error_obj = jsonrpc_validate_params(params, entry->params_spec);

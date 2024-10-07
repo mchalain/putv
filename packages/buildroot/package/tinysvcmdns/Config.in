@@ -1,0 +1,6 @@
+config BR2_PACKAGE_TINYSVCMDNS
+	bool "tinysvcmdns"
+	help
+	  Small library to support mDns protocol
+	  May expose service to the network
+	  https://github.com/tinysvcmdns-ng/tinysvcmdns

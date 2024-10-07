@@ -563,7 +563,10 @@ static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 }
 
 #ifdef TINYSVCMDNS
-static const char * _src_mdnssvc(void * arg, const char **target, int *port, const char *txt[])
+/**
+ * TODO check this function
+ */
+static const char * _src_mdnssvc(void * arg, const char **target, int *port, const char **txt[])
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 	*target = ctx->host;

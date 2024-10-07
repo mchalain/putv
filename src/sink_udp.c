@@ -508,7 +508,7 @@ static const char *sink_service(void * arg, const char **target, int *port, cons
 		return NULL;
 	*target = inet_ntoa(((struct sockaddr_in*)&(ctx->addr->saddr))->sin_addr);
 	*port = htons(((struct sockaddr_in*)&(ctx->addr->saddr))->sin_port);
-	*txt = ctx->sink_txt;
+	*txt = (const char **)ctx->sink_txt;
 	return rtp_service;
 }
 

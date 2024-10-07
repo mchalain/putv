@@ -35,7 +35,7 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 #ifdef SINK_FILE
 		sink_file,
 #endif
-#ifdef SINK_TINYALSA
+#ifdef HAVE_TINYALSA
 		sink_tinyalsa,
 #endif
 #ifdef SINK_UDP
@@ -45,7 +45,7 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 #ifdef SINK_UNIX
 		sink_unix,
 #endif
-#ifdef SINK_PULSE
+#ifdef HAVE_PULSE
 		sink_pulse,
 #endif
 		NULL

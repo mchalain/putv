@@ -44,6 +44,9 @@ struct sink_ctx_s
 	jitter_t *in;
 	event_listener_t *listener;
 
+	state_t state;
+
+	char *path;
 	const encoder_ops_t *encoder;
 	int fd;
 };
@@ -66,14 +69,36 @@ static const char *jitter_name = "file output";
 
 static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 {
-	int ret;
-	ret = write(ctx->fd, buff, len);
+	int ret = len;
+	if (ctx->fd == 0 && ctx->state == STATE_PLAY)
+	{
+		dbg("sink: reopen file %s", ctx->path);
+		ctx->fd = open(ctx->path, O_RDWR | O_CREAT, 0644);
+	}
+	if (ctx->fd != 0)
+		ret = write(ctx->fd, buff, len);
 	sink_dbg("sink: write %d", ret);
 	if (ret < 0)
 		err("sink file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
 		dbg("sink: end of file %d", len);
 	return ret;
+}
+
+static void _sink_playerstate_cb(void *arg, event_t event, void *data)
+{
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	event_player_state_t *edata = (event_player_state_t *)data;
+	dbg("event %d", edata->state);
+	ctx->state = edata->state;
+	if (ctx->fd != 0 && ctx->state == STATE_STOP)
+	{
+		close(ctx->fd);
+		warn("sink: close %s file", ctx->path);
+		ctx->fd = 0;
+	}
 }
 
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
@@ -92,6 +117,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 		ctx->fd = fd;
 		ctx->player = player;
 		ctx->encoder = encoder_check(path);
+		ctx->path = strdup(path);
 
 		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, 1, BUFFERSIZE);
 		dbg("sink: add consumer to %s", jitter->ctx->name);
@@ -99,6 +125,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 		jitter->ctx->consumer = (void *)ctx;
 		jitter->format = SINK_BITSSTREAM;
 		ctx->in = jitter;
+		//player_eventlistener(player, _sink_playerstate_cb, ctx, "sink_file");
 
 		return ctx;
 	}
@@ -131,7 +158,9 @@ static const encoder_ops_t *sink_encoder(sink_ctx_t *ctx)
 static void sink_destroy(sink_ctx_t *sink)
 {
 	jitter_destroy(sink->in);
-	close(sink->fd);
+	if (sink->fd != 0)
+		close(sink->fd);
+	free(sink->path);
 	free(sink);
 }
 

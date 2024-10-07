@@ -45,7 +45,7 @@ struct sink_ctx_s
 	jitter_t *in;
 	event_listener_t *listener;
 
-	const char *soundcard;
+	char *soundcard;
 	snd_pcm_t *playback_handle;
 	char *mixerch;
 	snd_mixer_t *mixer;
@@ -181,6 +181,37 @@ static int _pcm_config(jitter_format_t format, pcm_config_t *config)
 		break;
 	}
 	return downformat;
+}
+
+static int _sound_findcard(sink_ctx_t *ctx, const char *name)
+{
+	int cardnum = -1;
+	do
+	{
+		int err = snd_card_next(&cardnum);
+		if (err < 0)
+		{
+			err("sink: sound device error %s", snd_strerror(err));
+			break;
+		}
+		if (cardnum >= 0)
+		{
+			char *soundcard = NULL;
+			snd_card_get_name(cardnum, &soundcard);
+			dbg("sink: new card found %s", soundcard);
+			int ret = strcmp(name, soundcard);
+			free(soundcard);
+			if (ret == 0)
+			{
+				ctx->soundcard = calloc(6, sizeof(char));
+				snprintf(ctx->soundcard, 6, "hw:%.1i", cardnum);
+				break;
+			}
+		}
+	} while (cardnum > -1);
+	if (cardnum < 0)
+		return -1;
+	return 0;
 }
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
@@ -377,11 +408,18 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	if (ctx->mixerch == NULL)
 		ctx->mixerch = strdup(ALSA_MIXER);
 
-	ctx->soundcard = soundcard;
+	ctx->soundcard = strdup(soundcard);
 	ctx->buffersize = LATENCE_MS * samplerate / 1000;
 	ctx->samplerate = samplerate;
 	snd_lib_error_set_handler(_alsa_error);
-	if (_pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize) < 0)
+	int ret = _pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize);
+	if (ret < 0)
+	{
+		free(ctx->soundcard);
+		if (_sound_findcard(ctx, soundcard) == 0)
+			ret = _pcm_open(ctx, format, &ctx->samplerate, &ctx->buffersize);
+	}
+	if (ret < 0)
 	{
 		err("sink: init error %s", strerror(errno));
 		free(ctx);
@@ -668,6 +706,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 #ifdef SINK_ALSA_NOISE
 	free(ctx->noise);
 #endif
+	free(ctx->soundcard);
 	jitter_destroy(ctx->in);
 	free(ctx);
 }

@@ -35,6 +35,8 @@
 #include <signal.h>
 #include <errno.h>
 
+#include <termios.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -919,6 +921,7 @@ int run_shell(ctx_t *ctx)
 					continue;
 				fprintf(termout, "%c", c);
 				buffer[length++] = c;
+				buffer[length] = '\0';
 				continue;
 			}
 
@@ -928,10 +931,15 @@ int run_shell(ctx_t *ctx)
 				ctx->run = 0;
 				continue;
 			break;
+			case 0x7f: //backspace
 			case 0x08: //backspace
+				if (length == 0)
+					continue;
 				length--;
 				memmove(&buffer[length], &buffer[length + 1], sizeof(buffer) - length);
-				fprintf(termout, "\r%s  ", buffer);
+				buffer[length] = '\0';
+				fprintf(termout, "\r                         ");
+				fprintf(termout, "\r> %s", buffer);
 			break;
 			case 0x1B: // escape or up arrow
 				if (arrow == 0)
@@ -946,6 +954,7 @@ int run_shell(ctx_t *ctx)
 				memset(buffer, 0, sizeof(buffer));
 			break;
 			case '\n':
+				length++;
 				memcpy(history[last++], buffer, sizeof(buffer));
 				if (last == HISTORY_DEPTH)
 				{
@@ -990,6 +999,13 @@ int run_shell(ctx_t *ctx)
 			char *offset = buffer;
 			while (length > 0)
 			{
+				if (offset[0] == '\0')
+				{
+					offset++;
+					length--;
+					continue;
+				}
+				//dbg("execute %s", offset);
 				ret = parse_cmd(ctx, offset);
 				if (ret > 0)
 				{

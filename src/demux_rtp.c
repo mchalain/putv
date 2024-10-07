@@ -93,8 +93,8 @@ struct demux_ctx_s
 	jitte_t jitte;
 	heartbeat_t heartbeat;
 	unsigned short nbbuffers;
-	unsigned short seqnum;
-	unsigned short seqorig;
+	uint16_t seqnum;
+	uint16_t seqorig;
 	unsigned long missing;
 #ifdef DEMUX_RTP_REORDER
 	demux_reorder_t *reorder;
@@ -426,7 +426,7 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		if (ctx->seqnum == 0)
 			ctx->seqorig = ctx->seqnum = seqnum - 1;
 		ctx->seqnum++;
-		unsigned long missing = 0;
+		uint16_t missing = 0;
 #if 0
 		while (ctx->seqnum < seqnum)
 		{
@@ -456,8 +456,8 @@ static size_t demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t l
 		if (missing > 0)
 		{
 			ctx->missing += missing;
+			warn("demux: %u packets missing over %u", ctx->missing, ctx->seqnum - ctx->seqorig);
 			ctx->seqnum = seqnum;
-			warn("demux: %lu packet missing %u", missing, ctx->seqnum - ctx->seqorig);
 		}
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);

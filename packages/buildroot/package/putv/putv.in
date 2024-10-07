@@ -11,7 +11,7 @@ if [ -z "$OUTPUT" ]; then
   if [ -e /sys/class/sound/card0 ]; then
     FILTER=%FILTER%
     MIXER=%MIXER%
-    OUTPUT="alsa://default?format=24le,mixer=${MIXER}"
+    OUTPUT="alsa://default?format=24le&mixer=${MIXER}"
   else
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
   fi

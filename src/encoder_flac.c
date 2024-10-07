@@ -1,8 +1,8 @@
 /*****************************************************************************
- * encoder_lame.c
+ * encoder_flac.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
- * Copyright (C) 2016-2017
+ * Copyright (C) 2016-2025
  *
  * Authors: Marc Chalain <marc.chalain@gmail.com>
  *
@@ -115,7 +115,7 @@ static size_t encoder_output(encoder_ctx_t *ctx, const unsigned char *buffer, si
 		length = (ctx->out->ctx->size > bytes)? bytes:ctx->out->ctx->size - 1;
 		memcpy(ctx->outbuffer, buffer, length);
 
-		encoder_dbg("encoder: flac %lu", length);
+		encoder_dbg("encoder: flac push %lu bytes", length);
 		ctx->outbuffer = NULL;
 
 	}

@@ -66,7 +66,7 @@ putv_CFLAGS-$(DECODER_DUMP)+=-DDECODER_DUMP
 putv_SOURCES+=encoder_common.c
 putv_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
 putv_LIBS-$(ENCODER_LAME)+=mp3lame
-ifeq ($(ENCODER_FLAC),y)
+ifeq ($(ENCODER_LAME),y)
   ENCODER:=encoder_lame
 endif
 putv_SOURCES-$(ENCODER_FLAC)+=encoder_flac.c

@@ -2,7 +2,7 @@
  * encoder_lame.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
- * Copyright (C) 2016-2017
+ * Copyright (C) 2016-2025
  *
  * Authors: Marc Chalain <marc.chalain@gmail.com>
  *
@@ -123,7 +123,7 @@ struct encoder_ctx_s
 #endif
 
 static const char *jitter_name = "lame encoder";
-void error_report(const char *format, va_list ap)
+static void error_report(const char *format, va_list ap)
 {
 	fprintf(stderr, format, ap);
 }

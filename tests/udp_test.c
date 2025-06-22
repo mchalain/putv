@@ -50,13 +50,12 @@ int cli_transfer(int sock, int dumpfd, struct sockaddr *addr, int addrlen)
 			now.tv_sec -= 1;
 		}
 		dbg("recv %d %lu.%09lu", ret, now.tv_sec, now.tv_nsec);
-	
 	}
 	if (ret > 0)
 	{
 		ret = write(dumpfd, buff, ret);
 	}
-	return ret;
+	return (ret!= -1);
 }
 
 int srv_transfer(int sock, int dumpfd, struct sockaddr *addr, int addrlen)
@@ -87,28 +86,30 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "h:p:scf:");
+		opt = getopt(argc, argv, "hH:P:SC");
 		switch (opt)
 		{
 			case 'h':
+				fprintf(stderr, "%s [-H host] [-P port] [-S|-C] <file>\n", argv[0]);
+			return -1;
+			case 'H':
 				longaddress = inet_addr(optarg);
 			break;
-			case 'p':
+			case 'P':
 				iport = atoi(optarg);
 			break;
-			case 's':
+			case 'S':
 				mode = 's';
 				transfer_cb = srv_transfer;
 			break;
-			case 'c':
+			case 'C':
 				mode = 'c';
 				transfer_cb = cli_transfer;
 			break;
-			case 'f':
-				path = optarg;
-			break;
 		}
 	} while(opt != -1);
+	if (optind < argc)
+		path = argv[optind];
 
 	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
 

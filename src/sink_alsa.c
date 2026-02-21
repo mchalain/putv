@@ -510,11 +510,6 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 		}
 #endif
 	}
-#ifdef SAMPLERATE_AUTO
-	ctx->in->ctx->frequence = 0;
-#else
-	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
-#endif
 	return ret;
 }
 
@@ -627,7 +622,14 @@ static void *sink_thread(void *arg)
 		}
 		else
 #endif
+		{
+#ifdef SAMPLERATE_AUTO
+			ctx->in->ctx->frequence = 0;
+#else
+			ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+#endif
 			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
+		}
 	}
 	warn("sink: alsa thread end");
 #ifdef SINK_DUMP

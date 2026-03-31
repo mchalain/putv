@@ -38,7 +38,7 @@ typedef struct filter_s filter_t;
 
 typedef struct player_ctx_s player_ctx_t;
 
-player_ctx_t *player_init();
+player_ctx_t *player_init(const char *filtername);
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now);
 media_t *player_media(player_ctx_t *ctx);
 int player_subscribe(player_ctx_t *userdata, encoder_t *encoder);

@@ -214,19 +214,9 @@ static int _sound_findcard(sink_ctx_t *ctx, const char *name)
 	return 0;
 }
 
-static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
+static int _pcm_sethw(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
 {
 	int ret;
-	if (ctx->playback_handle == NULL)
-	{
-		sink_dbg("sink: open %s", ctx->soundcard);
-		ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
-		if (ret < 0)
-			return ret;
-	}
-	else
-		snd_pcm_drain(ctx->playback_handle);
-
 	pcm_config_t config = {0};
 	jitter_format_t downformat = _pcm_config(format, &config);
 
@@ -275,7 +265,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate
 	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, rate, NULL);
 	if (ret < 0)
 	{
-		err("sink: rate");
+		snd_pcm_hw_params_get_rate(hw_params, rate, NULL);
+		err("sink: rate %u", rate);
 		goto error;
 	}
 
@@ -327,6 +318,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffersize);
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
 	snd_pcm_hw_params_get_periods(hw_params, &periods, 0);
+	snd_pcm_hw_params_get_rate(hw_params, rate, NULL);
 	unsigned int periodtime = 0;
 	snd_pcm_hw_params_get_period_time(hw_params, &periodtime, 0);
 	warn("sink alsa config :\n" \
@@ -346,17 +338,32 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate
 		ctx->nchannels);
 	*size = periodsize * ctx->samplesize * ctx->nchannels;
 
-	ret = snd_pcm_prepare(ctx->playback_handle);
-	if (ret < 0)
-	{
-		err("sink: prepare");
-		goto error;
-	}
-
 error:
 	if (ret < 0)
 		err("alsa: pcm error %s", snd_strerror(ret));
 	snd_pcm_hw_params_free(hw_params);
+	return ret;
+}
+
+static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int *rate, unsigned int *size)
+{
+	int ret;
+	if (ctx->playback_handle == NULL)
+	{
+		sink_dbg("sink: open %s", ctx->soundcard);
+		ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
+		if (ret < 0)
+			return ret;
+	}
+	else
+		snd_pcm_drain(ctx->playback_handle);
+	ret = _pcm_sethw(ctx, format, rate, size);
+	if (ret == 0)
+		ret = snd_pcm_prepare(ctx->playback_handle);
+	if (ret < 0)
+	{
+		err("sink: prepare");
+	}
 	return ret;
 }
 

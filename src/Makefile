@@ -62,7 +62,7 @@ putv_LIBS-$(DECODER_MODULES)+=dl
 putv_CFLAGS-$(DECODER_DUMP)+=-DDECODER_DUMP
 putv_SOURCES+=encoder_common.c
 putv_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
-putv_LIBS-$(ENCODER_LAME)+=mp3lame
+putv_LIBRARY-$(ENCODER_LAME)+=lame
 ifeq ($(ENCODER_LAME),y)
   ENCODER:=encoder_lame
 endif
@@ -86,7 +86,7 @@ putv_SOURCES-$(MUX)+=mux_common.c
 putv_SOURCES-$(MUX)+=mux_passthrough.c
 putv_SOURCES-$(MUX_RTP)+=mux_rtp.c
 putv_SOURCES-$(SINK_ALSA)+=sink_alsa.c
-putv_LIBS-$(SINK_ALSA)+=asound
+putv_LIBRARY-$(SINK_ALSA)+=alsa
 putv_SOURCES-$(SINK_TINYALSA)+=sink_tinyalsa.c
 putv_LIBRARY-$(SINK_TINYALSA)+=tinyalsa
 putv_SOURCES-$(SINK_FILE)+=sink_file.c

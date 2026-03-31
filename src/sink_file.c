@@ -129,7 +129,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 
 		return ctx;
 	}
-	err("sink file error: %s", strerror(errno));
+	err("sink file %s error: %s", path, strerror(errno));
 	return NULL;
 }
 

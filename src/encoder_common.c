@@ -79,5 +79,6 @@ const encoder_ops_t *encoder_check(const char *path)
 			encoder = encoder_flac;
 #endif
 	}
+	warn("encoder: found %s", encoder->name);
 	return encoder;
 }

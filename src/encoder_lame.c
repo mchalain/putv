@@ -168,11 +168,11 @@ static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize,
 	warn("encoder MP3 config :");
 	warn("\tsample rate %d", ctx->samplerate);
 	warn("\tsample size %d", ctx->samplesize);
-	warn("\tnchannels %u", LAME_NCHANNELS);
+	warn("\tnchannels %u", DEFAULT_NCHANNELS);
 #ifdef ENCODER_VBR
-	warn("\tvariatic bitrate %d\n", DEFAULT_BITRATE);
+	warn("\tvariatic bitrate %d", DEFAULT_BITRATE);
 #else
-	warn("\bitrate %d\n", DEFAULT_BITRATE);
+	warn("\tbitrate %d", DEFAULT_BITRATE);
 #endif
 		
 	return 0;

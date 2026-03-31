@@ -150,6 +150,7 @@ static int filter_setoptions(filter_ctx_t *ctx, va_list params)
 		break;
 		case FILTER_SAMPLERATE:
 			ctx->input.samplerate = (unsigned int) va_arg(params, unsigned int);
+			warn("\tsample rate %u", ctx->input.samplerate);
 		break;
 		}
 		code = (int) va_arg(params, int);
@@ -374,12 +375,12 @@ int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)
 
 	if (jitter_samplerate(out) == 0)
 	{
-		filter_dbg("filter: change samplerate to %u", audio->samplerate);
+		dbg("filter: change samplerate to %u", audio->samplerate);
 		out->ctx->frequence = audio->samplerate;
 	}
 	else if (jitter_samplerate(out) != audio->samplerate)
 	{
-		err("filter: samplerate %d not supported", jitter_samplerate(out));
+		err("filter: samplerate %d not supported", audio->samplerate);
 	}
 
 	if (outbuffer == NULL)

@@ -50,6 +50,7 @@ struct sink_ctx_s
 {
 	player_ctx_t *player;
 	jitter_t *in;
+	const encoder_ops_t *encoder;
 	event_listener_t *listener;
 
 	const char *filepath;
@@ -129,6 +130,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
 	ctx->filepath = path;
+	ctx->encoder = encoder_check(path);
 
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, BUFFERSIZE);
 	jitter->ctx->frequence = 0;
@@ -162,7 +164,7 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 
 static const encoder_ops_t *sink_encoder(sink_ctx_t *ctx)
 {
-	return ENCODER;
+	return ctx->encoder;
 }
 
 static int sink_unxiclient(thread_info_t *info)
@@ -182,6 +184,8 @@ static int sink_unxiclient(thread_info_t *info)
 	ctx->nbclients++;
 
 #ifdef SINK_UNIX_ASYNC
+	ctx->ackstate = 1;
+	pthread_cond_broadcast(&ctx->ack);
 	int counter = ctx->counter;
 	while (run)
 	{

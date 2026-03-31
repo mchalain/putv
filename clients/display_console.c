@@ -44,7 +44,7 @@ typedef struct display_console_ctx_s
 	int linelength;
 } display_console_ctx_t;
 
-static void * display_create()
+static void * display_create(int argc, char** argv)
 {
 	display_console_ctx_t *ctx;
 	ctx = calloc(1, sizeof(ctx));

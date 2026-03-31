@@ -221,6 +221,8 @@ void *utils_parseurl(const char *url, const char **protocol, const char **host, 
 	}
 	if (!strncmp(str_protocol, "file", 4))
 		str_path = str_host;
+	if (!strncmp(str_protocol, "unix", 4))
+		str_path = str_host;
 	if (str_path != NULL)
 	{
 		if (str_search && str_search < str_path)

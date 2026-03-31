@@ -810,14 +810,14 @@ static int printevent(ctx_t *ctx, json_t *json_params)
 	return 0;
 }
 
-int parse_cmd(ctx_t *ctx, char *buffer)
+int parse_cmd(ctx_t *ctx, char *buffer, size_t bufferlength)
 {
 	static char history[1024] = {0};
 	int ret;
 	int length;
 
 	char *start = buffer;
-	while (start[0] == ' ') start++;
+	while (start[0] == ' ' && bufferlength--) start++;
 
 	char *end = NULL;
 	end = strchrnul(start, '\n');
@@ -872,6 +872,61 @@ int parse_cmd(ctx_t *ctx, char *buffer)
 	else
 		fprintf(termout, " command not found\n");
 	return end - buffer + 1;
+}
+
+int run_script(ctx_t *ctx)
+{
+	pthread_mutex_lock(&ctx->mutex);
+	while (ctx->client == NULL && ctx->run < 2)
+	{
+		pthread_cond_wait(&ctx->cond, &ctx->mutex);
+	}
+	pthread_mutex_unlock(&ctx->mutex);
+
+	off_t offset = 0;
+	char buffer[1024] = {0};
+	size_t length = sizeof(buffer);
+	ctx->run = 1;
+	int cmdready = 0;
+	while (ctx->run)
+	{
+		length = sizeof(buffer);
+		length = pread(ctx->inputfd, buffer, length, offset);
+		if (length <= 0)
+		{
+			ctx->run = 0;
+			break;
+		}
+		else
+			cmdready = 1;
+		if (cmdready)
+		{
+			char *iterator = buffer;
+			char *end = strchr(iterator, '\n');
+			while (end)
+			{
+				*end = '\0';
+				offset = end - buffer + 1;
+				int ret = parse_cmd(ctx, iterator, end - iterator);
+				if (ret < 0)
+				{
+					ctx->run = 0;
+					break;
+				}
+				else if (ret == CLIENT_WAITING)
+				{
+					sleep(1);
+				}
+				else
+				{
+					iterator = end + 1;
+					end = strchr(iterator, '\n');
+				}
+			}
+			cmdready = 0;
+		}
+	}
+	return 0;
 }
 
 #define HISTORY_DEPTH 10
@@ -1006,7 +1061,7 @@ int run_shell(ctx_t *ctx)
 					continue;
 				}
 				//dbg("execute %s", offset);
-				ret = parse_cmd(ctx, offset);
+				ret = parse_cmd(ctx, offset, length);
 				if (ret > 0)
 				{
 					offset += ret;
@@ -1170,12 +1225,12 @@ int main(int argc, char **argv)
 				termout = fopen("/dev/null", "w");
 			break;
 			case 'h':
-				fprintf(stderr, "cmdline -R <dir> -n <socketname> [-m <jsonfile>]");
+				fprintf(stderr, "cmdline -R <dir> -n <socketname> [-m <jsonfile>][-i <cmdfile>\n");
 				fprintf(stderr, "cmdline for putv applications\n");
-				fprintf(stderr, " -R <DIR>   change the socket directory directory");
-				fprintf(stderr, " -n <NAME>  change the socket name");
-				fprintf(stderr, " -m <FILE>  load Json file to manage media");
-				fprintf(stderr, " -i <FILE>  set filepath to read command (default: stdin)");
+				fprintf(stderr, " -R <DIR>   change the socket directory\n");
+				fprintf(stderr, " -n <NAME>  change the socket name\n");
+				fprintf(stderr, " -m <FILE>  load Json file to manage media\n");
+				fprintf(stderr, " -i <FILE>  set filepath to read command (default: stdin)\n");
 				return -1;
 			break;
 		}
@@ -1185,7 +1240,7 @@ int main(int argc, char **argv)
 	{
 		killdaemon(pidfile);
 	}
-	if ((data.inputfd != 0) && (mode & DAEMONIZE) && daemonize(pidfile) == -1)
+	if ((mode & DAEMONIZE) && daemonize(pidfile) == -1)
 	{
 		return 0;
 	}
@@ -1203,11 +1258,23 @@ int main(int argc, char **argv)
 	pthread_create(&thread, NULL, (__start_routine_t)run_client, (void *)&data);
 #endif
 	int ret;
-	do {
-		dbg("cmdline: new shell");
-		ret = run_shell(&data);
-		dbg("cmdline: end shell");
-	} while (ret < 0);
+	if (data.inputfd != 0)
+	{
+		ret = run_script(&data);
+		if (data.client)
+		{
+			sleep(1); // wait that the last request is treated otherwise the connection closing too fast
+			client_disconnect(data.client);
+		}
+	}
+	else
+	{
+		do {
+			dbg("cmdline: new shell");
+			ret = run_shell(&data);
+			dbg("cmdline: end shell");
+		} while (ret < 0);
+	}
 
 	pthread_join(thread, NULL);
 

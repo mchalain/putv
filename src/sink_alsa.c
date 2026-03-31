@@ -390,6 +390,8 @@ static void _sink_playerstate_cb(void *arg, event_t event, void *data)
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	event_player_state_t *edata = (event_player_state_t *)data;
 	ctx->state = edata->state;
+	dbg("sink: alsa rate %d", ctx->in->ctx->frequence);
+	ctx->in->ctx->frequence = 0;
 }
 
 static void _sink_mixer_settup(sink_ctx_t *ctx)
@@ -499,7 +501,7 @@ static jitter_t *alsa_jitter(sink_ctx_t *ctx, unsigned int index)
 static int _alsa_checksamplerate(sink_ctx_t *ctx)
 {
 	int ret = 0;
-	if(ctx->in->ctx->frequence && (ctx->in->ctx->frequence != ctx->samplerate))
+	if (ctx->in->ctx->frequence && (ctx->in->ctx->frequence != ctx->samplerate))
 	{
 		int size = ctx->buffersize;
 		int samplerate = ctx->in->ctx->frequence;
@@ -630,10 +632,12 @@ static void *sink_thread(void *arg)
 		else
 #endif
 		{
+#if 0
 #ifdef SAMPLERATE_AUTO
 			ctx->in->ctx->frequence = 0;
 #else
 			ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+#endif
 #endif
 			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		}

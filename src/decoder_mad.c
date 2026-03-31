@@ -260,6 +260,15 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
+static void _decoder_playerstate_cb(void *arg, event_t event, void *data)
+{
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
+	event_player_state_t *edata = (event_player_state_t *)data;
+	warn("decoder: mp3 file samplerate %d Hz", ctx->samplerate);
+}
+
 static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -268,6 +277,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
+	player_eventlistener(player, _decoder_playerstate_cb, ctx, "decoder_mad");
 	return ctx;
 }
 

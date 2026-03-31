@@ -15,9 +15,6 @@ putv_SOURCES+=jitter_common.c
 putv_SOURCES+=jitter_sg.c
 putv_SOURCES+=jitter_ring.c
 putv_LIBS+=pthread
-putv_CFLAGS-$(SAMPLERATE_AUTO)+=-DDEFAULT_SAMPLERATE=44100
-putv_CFLAGS-$(SAMPLERATE_44100)+=-DDEFAULT_SAMPLERATE=44100
-putv_CFLAGS-$(SAMPLERATE_48000)+=-DDEFAULT_SAMPLERATE=48000
 putv_SOURCES+=media_common.c
 putv_SOURCES+=src_common.c
 putv_SOURCES+=decoder_common.c
@@ -122,9 +119,6 @@ modules-$(DECODER_MAD)+=decoder_mad
 decoder_mad_SOURCES+=decoder_mad.c
 decoder_mad_LIBS+=mad
 modules-$(DECODER_FLAC)+=decoder_flac
-decoder_flac_CFLAGS-$(SAMPLERATE_AUTO)+=-DDEFAULT_SAMPLERATE=44100
-decoder_flac_CFLAGS-$(SAMPLERATE_44100)+=-DDEFAULT_SAMPLERATE=44100
-decoder_flac_CFLAGS-$(SAMPLERATE_48000)+=-DDEFAULT_SAMPLERATE=48000
 decoder_flac_SOURCES+=decoder_flac.c
 decoder_flac_LIBRARY+=FLAC
 endif

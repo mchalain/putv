@@ -154,13 +154,13 @@ static void _decoder_init(void)
 {
 	const decoder_ops_t *decoders[] = {
 #ifndef DECODER_MODULES
-#ifdef DECODER_MAD
+#ifdef HAVE_MAD
 		decoder_mad,
 #endif
-#ifdef DECODER_FLAC
+#ifdef HAVE_FLAC
 		decoder_flac,
 #endif
-#ifdef DECODER_FAAD2
+#ifdef HAVE_FAAD2
 		decoder_faad2,
 #endif
 #endif

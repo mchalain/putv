@@ -109,7 +109,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int ret = 0;
 	int waiting = 0;
-	const encoder_ops_t *encoder = encoder_lame;
+	const encoder_ops_t *encoder = ENCODER;
 
 	const char *protocol = NULL;
 	const char *host = NULL;

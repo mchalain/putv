@@ -135,9 +135,9 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	ctx->mime = mime;
 	if (ctx->mime == mime_octetstream)
 	{
-#ifdef DECODER_LAME
+#ifdef HAVE_LAME
 		ctx->mime = mime_audiomp3;
-#elif defined(DECODER_FLAC)
+#elif defined(HAVE_FLAC)
 		ctx->mime = mime_audioflac;
 #endif
 	}

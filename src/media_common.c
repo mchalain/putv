@@ -38,12 +38,12 @@
 #include <limits.h>
 #include <stdint.h>
 
-#ifdef USE_ID3TAG
+#ifdef HAVE_ID3TAG
 #include <id3tag.h>
 #define N_(string) string
 #endif
 
-#ifdef USE_OGGMETADDATA
+#ifdef HAVE_FLAC
 #include <FLAC/metadata.h>
 #endif
 
@@ -354,7 +354,7 @@ static char *media_tmpfile(char *path, const char *mime, const unsigned char *da
 	return path;
 }
 
-#ifdef USE_ID3TAG
+#ifdef HAVE_ID3TAG
 #define ID3MAXFIELDS 5
 int media_parseid3tag(const char *path, json_t *object)
 {
@@ -550,7 +550,7 @@ int media_parseid3tag(const char *path, json_t *object)
 }
 #endif
 
-#ifdef USE_OGGMETADDATA
+#ifdef HAVE_FLAC
 int media_parseoggmetadata(const char *path, json_t *object)
 {
 	struct
@@ -683,7 +683,7 @@ media_t *media_build(player_ctx_t *player, const char *url)
 	#ifdef MEDIA_DIR
 		media_dir,
 	#endif
-	#ifdef MEDIA_SQLITE
+	#ifdef HAVE_SQLITE3
 		media_sqlite,
 	#endif
 	#ifdef MEDIA_FILE
@@ -736,13 +736,13 @@ char *media_fillinfo(const char *url, const char *mime)
 	else
 		return NULL;
 	object = json_object();
-#ifdef USE_ID3TAG
+#ifdef HAVE_ID3TAG
 	if (mime && !strcmp(mime, mime_audiomp3))
 	{
 		ret = media_parseid3tag(path, object);
 	}
 #endif
-#ifdef USE_OGGMETADDATA
+#ifdef HAVE_FLAC
 	if (mime && !strcmp(mime, mime_audioflac))
 	{
 		ret = media_parseoggmetadata(path, object);

@@ -94,7 +94,7 @@ struct sink_ctx_s
 #define SINK_PRIORITY 65
 #endif
 
-#define BUFFERSIZE ENCODER_FRAME_SIZE
+#define BUFFERSIZE 1500
 
 static const char *jitter_name = "unix socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)

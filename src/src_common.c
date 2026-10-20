@@ -83,10 +83,10 @@ void src_init(void)
 #ifdef SRC_UNIX
 	src_ops_register(src_unix);
 #endif
-#ifdef SRC_CURL
+#ifdef HAVE_LIBCURL
 	src_ops_register(src_curl);
 #endif
-#ifdef SRC_ALSA
+#ifdef HAVE_ALSA
 	src_ops_register(src_alsa);
 #endif
 #ifdef SRC_UDP

@@ -51,30 +51,30 @@ const encoder_ops_t *encoder_check(const char *path)
 	const char *ext = strrchr(path, '.');
 	if (ext != NULL)
 	{
-#ifdef ENCODER_LAME
+#ifdef HAVE_LAME
 		if (!strncmp(ext, ".mp3", len))
 			encoder = encoder_lame;
 #endif
-#ifdef ENCODER_FLAC
+#ifdef HAVE_FLAC
 		if (!strncmp(ext, ".flac", len))
 			encoder = encoder_flac;
 #endif
-#ifdef ENCODER_FAAC
+#ifdef HAVE_FAAC
 		if (!strncmp(ext, ".aac", len))
 			encoder = encoder_faac;
 #endif
 	}
 	else
 	{
-#ifdef ENCODER_LAME
+#ifdef HAVE_LAME
 		if (!strncmp(path, mime_audiomp3, len))
 			encoder = encoder_lame;
 #endif
-#ifdef ENCODER_FLAC
+#ifdef HAVE_FLAC
 		if (!strncmp(path, mime_audioflac, len))
 			encoder = encoder_flac;
 #endif
-#ifdef ENCODER_FAAC
+#ifdef HAVE_FAAC
 		if (!strncmp(path, mime_audioaac, len))
 			encoder = encoder_flac;
 #endif

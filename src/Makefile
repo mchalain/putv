@@ -28,7 +28,7 @@ putv_SOURCES-$(FILTER_MIXED)+=filter_mixed.c
 putv_SOURCES-$(FILTER_STATS)+=filter_stats.c
 putv_LIBS-$(FILTER_STATS)+=m
 
-putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
+putv_SOURCES-$(HAVE_SQLITE3)+=media_sqlite.c
 putv_LIBRARY-$(MEDIA_SQLITE)+=sqlite3
 putv_LIBRARY-$(MEDIA_SQLITE_EXT)+=jansson
 putv_SOURCES-$(MEDIA_FILE)+=media_file.c
@@ -39,9 +39,9 @@ putv_SOURCES-$(HEARTBEAT)+=heartbeat_pulse.c
 putv_CFLAGS-$(HEARTBEAT)+=-DHEARTBEAT_COEF_1000=1000
 putv_LIBS-$(HEARTBEAT)+=rt
 putv_SOURCES-$(SRC_FILE)+=src_file.c
-putv_SOURCES-$(SRC_ALSA)+=src_alsa.c
+putv_SOURCES-$(HAVE_ALSA)+=src_alsa.c
 putv_LIBRARY-$(SRC_ALSA)+=alsa
-putv_SOURCES-$(SRC_CURL)+=src_curl.c
+putv_SOURCES-$(HAVE_LIBCURL)+=src_curl.c
 putv_LIBRARY-$(SRC_CURL)+=libcurl
 putv_SOURCES-$(SRC_UNIX)+=src_unix.c
 putv_SOURCES-$(SRC_UDP)+=src_udp.c
@@ -51,49 +51,49 @@ putv_SOURCES-$(DEMUX_RTP)+=demux_rtp.c
 putv_SOURCES-$(DEMUX_DVB)+=demux_dvb.c
 putv_SOURCES-$(DECODER_PASSTHROUGH)+=decoder_passthrough.c
 ifneq ($(DECODER_MODULES),y)
-putv_SOURCES-$(DECODER_MAD)+=decoder_mad.c
+putv_SOURCES-$(HAVE_MAD)+=decoder_mad.c
 putv_LIBRARY-$(DECODER_MAD)+=mad
-putv_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
+putv_SOURCES-$(HAVE_FLAC)+=decoder_flac.c
 putv_LIBRARY-$(DECODER_FLAC)+=flac
-putv_SOURCES-$(DECODER_FAAD2)+=decoder_faad2.c
+putv_SOURCES-$(HAVE_FAAD2)+=decoder_faad2.c
 putv_LIBRARY-$(DECODER_FAAD2)+=faad2
 endif
 putv_LIBS-$(DECODER_MODULES)+=dl
 putv_CFLAGS-$(DECODER_DUMP)+=-DDECODER_DUMP
 putv_SOURCES+=encoder_common.c
-putv_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
-putv_LIBRARY-$(ENCODER_LAME)+=lame
-ifeq ($(ENCODER_LAME),y)
-  ENCODER:=encoder_lame
-endif
-putv_SOURCES-$(ENCODER_FLAC)+=encoder_flac.c
-putv_LIBRARY-$(ENCODER_FLAC)+=flac
-ifeq ($(ENCODER_FLAC),y)
-  ENCODER:=encoder_flac
-endif
-putv_SOURCES-$(ENCODER_FAAC)+=encoder_faac.c
-putv_LIBS-$(ENCODER_FAAC)+=faac
-ifeq ($(ENCODER_FAAC),y)
-  ENCODER:=encoder_faac
-endif
 putv_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
 ifeq ($(ENCODER_PASSTHROUGH),y)
   ENCODER:=encoder_passthrough
+endif
+putv_SOURCES-$(HAVE_LAME)+=encoder_lame.c
+putv_LIBRARY-$(ENCODER_LAME)+=lame
+ifeq ($(HAVE_LAME),y)
+  ENCODER:=encoder_lame
+endif
+putv_SOURCES-$(HAVE_FLAC)+=encoder_flac.c
+putv_LIBRARY-$(ENCODER_FLAC)+=flac
+ifeq ($(HAVE_FLAC),y)
+  ENCODER:=encoder_flac
+endif
+putv_SOURCES-$(HAVE_FAAC)+=encoder_faac.c
+putv_LIBS-$(ENCODER_FAAC)+=faac
+ifeq ($(HAVE_FAAC),y)
+  ENCODER:=encoder_faac
 endif
 putv_CFLAGS+=-DENCODER=$(ENCODER)
 putv_CFLAGS-$(ENCODER_DUMP)+=-DENCODER_DUMP
 putv_SOURCES-$(MUX)+=mux_common.c
 putv_SOURCES-$(MUX)+=mux_passthrough.c
 putv_SOURCES-$(MUX_RTP)+=mux_rtp.c
-putv_SOURCES-$(SINK_ALSA)+=sink_alsa.c
+putv_SOURCES-$(HAVE_ALSA)+=sink_alsa.c
 putv_LIBRARY-$(SINK_ALSA)+=alsa
-putv_SOURCES-$(SINK_TINYALSA)+=sink_tinyalsa.c
+putv_SOURCES-$(HAVE_TINYALSA)+=sink_tinyalsa.c
 putv_LIBRARY-$(SINK_TINYALSA)+=tinyalsa
 putv_SOURCES-$(SINK_FILE)+=sink_file.c
 putv_SOURCES-$(SINK_UDP)+=sink_udp.c
 putv_SOURCES-$(SINK_UNIX)+=sink_unix.c
 putv_SOURCES-$(SINK_UNIX)+=unix_server.c
-putv_SOURCES-$(SINK_PULSE)+=sink_pulse.c
+putv_SOURCES-$(HAVE_PULSE)+=sink_pulse.c
 putv_LIBRARY-$(SINK_PULSE)+=libpulse-simple
 putv_CFLAGS-$(SINK_DUMP)+=-DSINK_DUMP
 putv_SOURCES-$(CMDLINE)+=cmds_line.c
@@ -109,7 +109,7 @@ putv_LIBS-$(TINYSVCMDNS)+=tinysvcmdns
 putv_CFLAGS-$(TINYSVCMDNS)+=-I ../lib/tinysvcmdns
 putv_LDFLAGS-$(TINYSVCMDNS)+=-L ../lib/
 putv_LIBRARY-$(USE_ID3TAG)+=id3tag
-putv_LIBS-$(USE_OGGMETADDATA)+=FLAC
+putv_LIBRARY-$(USE_OGGMETADDATA)+=FLAC
 putv_LIBS-$(USE_TIMER)+=rt
 
 putv_CFLAGS-$(DEBUG)+=-g -DDEBUG -O1

@@ -91,9 +91,9 @@ static const char *mux_mime(mux_ctx_t *ctx, unsigned int index)
 		return NULL;
 	if (ctx->mime)
 		return ctx->mime;
-#ifdef DECODER_MAD
+#ifdef HAVE_MAD
 	return mime_audiomp3;
-#elif defined(DECODER_FLAC)
+#elif defined(HAVE_FLAC)
 	return mime_audioflac;
 #else
 	return mime_audiopcm;

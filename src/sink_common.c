@@ -29,7 +29,7 @@ static sink_t _sink = {0};
 sink_t *sink_build(player_ctx_t *player, const char *arg)
 {
 	const sink_ops_t *sinklist[] = {
-#ifdef SINK_ALSA
+#ifdef HAVE_ALSA
 		sink_alsa,
 #endif
 #ifdef SINK_FILE

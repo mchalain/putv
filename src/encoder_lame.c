@@ -93,7 +93,7 @@ struct encoder_ctx_s
 #if (DEFAULT_SAMPLERATE == 0) || ! defined(DEFAULT_SAMPLERATE)
 # warning samplerate set to 0
 # undef DEFAULT_SAMPLERATE
-# define 48000
+# define DEFAULT_SAMPLERATE 48000
 #endif
 
 // Lame supports only u16 samples
@@ -102,9 +102,9 @@ struct encoder_ctx_s
 #ifndef DEFAULT_BITRATE
 # if DEFAULT_SAMPLERATE == 48000
 /// output stream is more fluent if input and output framerate are the same
-#  define OUTPUT_AVERAGE 1000
+#  define OUTPUT_AVERAGE 1377
 #  if defined(ENCODER_VBR)
-#   define DEFAULT_BITRATE 5
+#   define DEFAULT_BITRATE 10
 #  else
 #   define DEFAULT_BITRATE 224
 #  endif
@@ -221,6 +221,27 @@ static void encoder_message(const char *format, va_list ap)
 }
 #endif
 
+static int encoder_lame_flush(encoder_ctx_t *ctx)
+{
+	if (ctx->outbuffer == NULL)
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	if (ctx->outbuffer == NULL)
+		return -1;
+	int ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
+	if (ret > 0)
+	{
+		beat_t beat = {0};
+#if defined (ENCODER_HEARTBEAT) && !defined (ENCODER_VBR)
+		beat.bitrate.length = ret;
+#endif
+		ctx->out->ops->push(ctx->out->ctx, ret, &beat);
+		ctx->outbuffer = NULL;
+	}
+	else if (ret < 0)
+		warn("encoder lame: flush before samplerate change failed %d", ret);
+	return ret;
+}
+
 static void *lame_thread(void *arg)
 {
 	int result = 0;
@@ -252,10 +273,12 @@ static void *lame_thread(void *arg)
 		nsamples += inlength;
 		if (inlength < ctx->samplesframe)
 			warn("encoder lame: frame too small %d %ld", inlength, ctx->in->ctx->size);
-		if (ctx->in->ctx->frequence != ctx->samplerate)
+		unsigned int frequence = ctx->in->ctx->frequence;
+		if (frequence && frequence != ctx->samplerate)
 		{
-			warn("set lame samplerate %u",ctx->in->ctx->frequence);
-			encoder_lame_init(ctx, ctx->in->ctx->frequence, ctx->samplesize * 8, ctx->nchannels);
+			warn("set lame samplerate %u",frequence);
+			encoder_lame_flush(ctx);
+			encoder_lame_init(ctx, frequence, ctx->samplesize * 8, ctx->nchannels);
 		}
 		if (ctx->outbuffer == NULL)
 		{

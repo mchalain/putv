@@ -230,6 +230,7 @@ static void *_decoder_thread(void *arg)
 
 	dbg("decoder: stop running");
 	player_state(ctx->player, STATE_CHANGE);
+	ctx->out->ctx->frequence = 0;
 
 	return (void *)(intptr_t)result;
 }

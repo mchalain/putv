@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #define __USE_GNU
 #include <pthread.h>
@@ -58,6 +59,7 @@ struct src_ctx_s
 		SRC_END,
 	} state;
 	CURL *curl;
+	char *token;
 	const char *mime;
 	decoder_t *estream;
 	long pid;
@@ -130,6 +132,31 @@ static int xferinfo(void *arg,
 	return 0;
 }
 
+static char *_read_token_from_file(const char *filepath)
+{
+    if (!filepath || filepath[0] == '\0')
+        return NULL;
+
+    FILE *file = fopen(filepath, "r");
+    if (!file)
+        return NULL;
+
+    char *token = NULL;
+    size_t len = 0;
+    ssize_t read = getline(&token, &len, file);
+    fclose(file);
+
+    if (read <= 0) {
+        free(token);
+        return NULL;
+    }
+
+    // Supprimer le saut de ligne final si présent
+    if (token[read - 1] == '\n')
+        token[read - 1] = '\0';
+    return token;
+}
+
 static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *mime)
 {
 	src_ctx_t *ctx;
@@ -145,20 +172,40 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *
 		pthread_mutex_init(&ctx->mutex, NULL);
 		pthread_cond_init(&ctx->cond, NULL);
 
-		curl_easy_setopt(curl, CURLOPT_URL, arg);
-		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo);
-		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, SRC_CURL_VERBOSE);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
+		int ret;
+		ret = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_URL, arg);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_VERBOSE, SRC_CURL_VERBOSE);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+		ret = curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
+		if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
 		//curl_easy_setopt(curl, CURLOPT_USERPWD, "user:password");
 		//curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC | CURLAUTH_DIGEST);
+		const char *token_file_path = getenv("PUTV_CURL_TOKEN");
+		char *token = _read_token_from_file(token_file_path);
+		if (token)
+		{
+			ret = curl_easy_setopt(curl, CURLOPT_COOKIE, token);
+			if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+			ctx->token = token;
+		}
 
 #ifdef CURL_DUMP
 		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
-		dbg("src: %s", src_curl->name);
+		warn("src: curl %s", src_curl->name);
 	}
 	return ctx;
 }
@@ -166,11 +213,11 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *
 static void *_src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
-	src_dbg("src: curl running");
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
-		err("src curl error %d on %p", ret, ctx->curl);
+		err("src curl error %s on %p", curl_easy_strerror(ret), ctx->curl);
+		usleep(100000);
 		return 0;
 	}
 	dbg("src: end of stream");
@@ -269,13 +316,16 @@ static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg
 
 static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
+	int ret;
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_HIGH);
-	curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
-	curl_easy_setopt(ctx->curl, CURLOPT_MAX_RECV_SPEED_LARGE,
+	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
+	if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
+	ret = curl_easy_setopt(ctx->curl, CURLOPT_MAX_RECV_SPEED_LARGE,
 				(curl_off_t)ctx->out->ctx->size * ctx->out->ctx->count);
+	if (ret) err("src: curl (%d) error %s", __LINE__, curl_easy_strerror(ret));
 }
 
 static decoder_t *_src_estream(src_ctx_t *ctx, long index)
@@ -286,6 +336,10 @@ static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 static void _src_destroy(src_ctx_t *ctx)
 {
 	dbg("src: destroy");
+	if (ctx->token)
+	{
+		free(ctx->token);
+	}
 	if (ctx->out != NULL)
 	{
 		ctx->out->ops->flush(ctx->out->ctx);

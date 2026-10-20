@@ -40,7 +40,7 @@ putv_CFLAGS-$(HEARTBEAT)+=-DHEARTBEAT_COEF_1000=1000
 putv_LIBS-$(HEARTBEAT)+=rt
 putv_SOURCES-$(SRC_FILE)+=src_file.c
 putv_SOURCES-$(SRC_ALSA)+=src_alsa.c
-putv_LIBS-$(SRC_ALSA)+=asound
+putv_LIBRARY-$(SRC_ALSA)+=alsa
 putv_SOURCES-$(SRC_CURL)+=src_curl.c
 putv_LIBRARY-$(SRC_CURL)+=libcurl
 putv_SOURCES-$(SRC_UNIX)+=src_unix.c

@@ -202,9 +202,10 @@ static int sink_unxiclient(thread_info_t *info)
 				run = 0;
 		}
 		counter = ctx->counter;
-		ctx->ackstate = 1;
+		ctx->ackstate++;
 		pthread_mutex_unlock(&ctx->mutex);
-		pthread_cond_broadcast(&ctx->ack);
+		if (ctx->ackstate == ctx->nbclients)
+			pthread_cond_broadcast(&ctx->ack);
 	}
 #else
 	int i;
